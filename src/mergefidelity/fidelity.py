@@ -145,12 +145,44 @@ def _payload_paths(entry):
     return set(hunk.path for hunk in entry.hunks) if entry is not None else set()
 
 
+def require_ref(repo, ref, flag):
+    """把"用户给了一个解不出来的引用"归为**用法错误（退出码 2）**，不是环境问题。
+
+    契约：2 = 用法/输入错误；3 = 环境不满足（git 版本、仓库不存在、超时）。
+    让坏 rev 落成 3 会把"我参数写错了"读成"这台机器做不了"。
+    """
+    if ref is None:
+        return
+    result = gitobj.run_git(repo, ["rev-parse", "--verify", "--quiet", "%s^{commit}" % ref],
+                            check=False)
+    if result.returncode != 0:
+        raise UsageError("%s 不是有效引用：%s" % (flag, ref))
+
+
+def validate_range_spec(repo, spec):
+    """校验 `A..B` / `A...B` 的两侧（空侧视为省略），坏的一侧报用法错误。"""
+    if spec is None:
+        return
+    separator = "..." if "..." in spec else ".."
+    if separator not in spec:
+        require_ref(repo, spec, "--range")
+        return
+    left, _, right = spec.partition(separator)
+    require_ref(repo, left or None, "--range")
+    require_ref(repo, right or None, "--range")
+
+
 def scan(repo, *, since=None, until=None, range_spec=None, as_of=None,
          kinds=DEFAULT_KINDS, show_resolution=False):
     """扫描范围内的 merge，返回**未填 digest** 的报告对象。"""
     gitobj.require_git_repo(repo)
     git_version = gitobj.require_version(repo, gitobj.GIT_MIN_FIDELITY)
     object_format = gitobj.object_format(repo)
+
+    # 先把"用户输入解不出来的引用"拦成用法错误（2），再谈环境（3）
+    require_ref(repo, since, "--since")
+    require_ref(repo, until, "--until")
+    validate_range_spec(repo, range_spec)
 
     end_rev = until or "HEAD"
     if range_spec:

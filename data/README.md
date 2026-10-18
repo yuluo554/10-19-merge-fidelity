@@ -70,7 +70,8 @@
 - **全部 fixture 为本地合成的假仓库**，不包含任何真实公司、产品、人员或内部代码。
 - **命名白名单**：项目名固定使用 `synthapp`；路径固定使用 `src/synthapp/`、`tests/synthapp/`、`docs/`；分支名固定使用 `main`、`release/1.0`、`feature/synth-a`、`feature/synth-b`；作者固定 `Fixture Bot <fixture@example.invalid>`；提交时间固定为脚本内写死的 UTC 时间戳（通过 `GIT_AUTHOR_DATE` / `GIT_COMMITTER_DATE` 设置）。不得出现真实人名、真实邮箱、真实域名。
 - **不得引入真实文号、真实日期事件、真实数值指标**：fixture 里的版本号、错误码、配置值均为合成常量，且在 `expect.json` 中登记。
-- **10 个 fidelity fixture，每个只注入 1 个已知缺陷**，缺陷类型分布：夹带 4、静默吞掉 3、正确冲突解决 2、octopus 1。每个 fixture 目录含：
+- **12 个 fidelity fixture** = 题面要求的 10 个（夹带 4、静默吞掉 3、正确冲突解决 2、octopus 1，每个只注入 1 个已知缺陷）
++ 2 个守护（`drop-then-readd` 重引入抑制反例、`custom-driver` 自定义 driver 跳过）。每个 fixture 目录含：
   - `build.sh`（或 `tools/gen_fixtures.py` 中的同名函数）：重建仓库，固定全部可变输入；
   - `expect.json`：golden 输出，含 `blob_fidelity`、hunk 列表（path + old_range + new_range + kind）、`skipped` 记录；
   - `README.md`：一句话说明注入了什么缺陷、期望工具报什么。
@@ -85,6 +86,8 @@
 对 merge commit `M`，父提交为 `P1`、`P2`，`B = merge-base(P1, P2)`：
 
 - `mechanical_tree(M)` = `git merge-tree --write-tree --merge-base=B P1 P2` 输出的 tree OID（exit 0 或 exit 1 均视为有效结果；exit 1 表示冲突，树内含冲突标记）。
+  **该调用必须在 §4.6 的固定 `-c` 覆盖项下执行**：实测 `merge.conflictStyle` 会改变机械树 OID
+  （默认 `51683564511b…` → `zdiff3` 下 `0f5a5d03ff9a…`），不钉死则同一仓库在不同机器上结论不同。
 - `recorded_tree(M)` = `M^{tree}`。
 - 逐 path 比较 `recorded_tree` 与 `mechanical_tree` 中同名 blob 的 OID。路径集合取两者并集，仅存在于一侧的路径按"缺失"处理。
 

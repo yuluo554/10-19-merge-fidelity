@@ -19,16 +19,18 @@
 
 | 里程碑 | 内容 | 状态 |
 |---|---|---|
-| M0 | 计划文档（`plan/00`–`06`）+ 可安装骨架 + CLI 契约 | ✅ 本提交 |
-| M1 | 数据先行：`tools/gen_fixtures.py` + 19 个合成 fixture 与 golden | ⬜ 计划中 |
-| M2 | `fidelity scan`：机械树复算 + 三类 hunk 分类 | ⬜ 计划中 |
-| M3 | `parity`：跨分支三态（`-U0` patch-id + apply 兜底） | ⬜ 计划中 |
-| M4 | `ledger`：revert / 复活账本 | ⬜ 计划中 |
-| M5 | `report`（digest + `--verify`）/ `gate`（过期基线门禁） | ⬜ 计划中 |
-| M6 | 发布：公开仓库 + v0.1.0 tag + Release 附件 | ⬜ 计划中 |
+| M0 | 计划文档（`plan/00`–`06`）+ 可安装骨架 + CLI 契约 | ✅ 已完成 |
+| M1 | 数据先行：`tools/gen_fixtures.py` + 21 个合成 fixture 与 golden（`--check` 位级一致） | ✅ 已完成 |
+| M2 | `fidelity scan`：机械树复算 + `blob_fidelity` + 三类 hunk（12/12 fixture 与 golden 逐项一致） | ✅ 已完成 |
+| M3 | `parity`：跨分支三态（`-U0` patch-id + apply 兜底） | ⬜ 未开工 |
+| M4 | `ledger`：revert / 复活账本 | ⬜ 未开工 |
+| M5 | `report`（digest + `--verify`）/ `gate`（过期基线门禁） | ⬜ 未开工 |
+| M6 | 发布：公开仓库 + v0.1.0 tag + Release 附件 | ⬜ 未开工 |
 
-> 骨架期五个子命令**已注册并可 `--help`**，但未落地的模块以**退出码 2 + 中文提示**收场，
-> **不输出伪造的空结果**。每个模块落地时同轮退役该提示。
+> `fidelity` 已可用；`parity` / `ledger` / `report` / `gate` **已注册并可 `--help`**，但尚未实现的
+> 模块以**退出码 2 + 中文提示**收场，**不输出伪造的空结果**（每个模块落地时同轮退役该提示）。
+>
+> 开发进度与逐项证据见 `plan/00-README总览.md`（承诺-证据台账 + 里程碑表）与各 `plan/HANDOFF-*.md`。
 
 ## 安装
 
@@ -42,11 +44,12 @@ Windows 上 `python` 可能是应用商店占位符，用 `py -3.8` / `py -3.12`
 
 ## 用法（最小复现命令）
 
-> 下列命令的**参数契约自 M0 起固定**；功能里程碑落地后即按此形态可用。
+> `fidelity` 已按下列形态可用；`parity` / `gate` 的参数契约自 M0 起固定，功能里程碑落地后即可用。
 
 ```bash
 # 场景一：扫描一个仓库的全部 merge，看有哪些夹带/吞掉
 mergefidelity fidelity scan /path/to/repo --show-kind=smuggled,dropped
+mergefidelity fidelity scan /path/to/repo --since=v0.1.0 --fail-on=smuggled   # CI 用：命中即退出码 1
 
 # 场景二：release 分支上的修复有没有回流到 main
 mergefidelity parity /path/to/repo --from=release/1.0 --to=main
@@ -84,8 +87,15 @@ mergefidelity gate /path/to/repo --since=v0.1.0 --baseline=audit-baseline.toml -
 
 - **octopus merge（父提交 >2）与自定义 merge driver 命中的路径**统一输出 `SKIPPED(reason=...)`：
   显式记录、不静默漏报、不影响退出码；首期不做近似分析。
+- **`.gitattributes` 模式匹配是有意简化**：支持 `*.ext`、顶层文件名、`dir/**`、`/精确路径`，
+  **不支持** `!` 取反、`[abc]` 字符组与 `**/` 中缀。命中即 `SKIPPED(custom_driver)`，
+  宁可少命中（保守）也不做近似分析；简化范围写在此处以便复核。
 - **git 版本会让结论漂移**：`--remerge-diff` 需 ≥2.36、`merge-tree --write-tree` 需 ≥2.38；
   低于门槛退出码 3，不降级猜测。
+- **判定相关配置被钉死**：`core.quotepath` / `diff.algorithm` / `diff.noprefix` /
+  `merge.conflictStyle` 等由工具固定注入，并登记在报告头的 `config_overrides`。
+  理由：实测 `merge.conflictStyle=zdiff3` 会改变机械树 OID（`51683564511b…` → `0f5a5d03ff9a…`），
+  不钉死则同一仓库在不同机器上得出不同结论。**你的仓库/用户级配置不会影响判定**。
 - **跨平台**：首期只在 Windows（git 2.54.0.windows.1）实测；Linux/macOS 由 CI 矩阵覆盖。
 - **规模**：>10 万提交的仓库无样本，首期不承诺上限。
 - **结论语义**：`blob_fidelity` 与 finding 是"机械合并 vs 实际记录"的**差异证据**，

@@ -14,16 +14,17 @@
 | plan/01-题目文档.md | 十段式题目定稿（含招牌动词表、含金量锚点、边界与非目标） | ✅ v1 |
 | plan/02-架构与技术选型.md | 分层架构、git 访问层、确定性架构、退出码契约、选型与弃选 | ✅ v1 |
 | plan/03-模块详设.md | 五子命令 + 共享层的接口、数据结构、处理顺序、失败路径、测试点 | ✅ v1 |
-| plan/04-数据计划.md | 生成器确定性纪律、19 个 fixture 设计、golden 纪律、bench | ✅ v1 |
+| plan/04-数据计划.md | 生成器确定性纪律、21 个 fixture 设计、golden 纪律、bench | ✅ v1 |
 | plan/05-里程碑.md | 每周可演示物、出口门、环境事实、风险预案 | ✅ v1 |
 | plan/06-交付对标.md | 题面 §三/§四逐条落位、待定决策表、发布前检查清单 | ✅ v1 |
 | plan/HANDOFF-M1.md | 下一棒（数据先行）交接快照 | ✅ M0 收尾（历史） |
 | plan/HANDOFF-M2.md | 下一棒（`fidelity scan`）交接快照 | ✅ M1 收尾（历史） |
 | plan/HANDOFF-M3.md | 下一棒（`parity`）交接快照 | ✅ M2 收尾 |
+| plan/AUDIT-M0-M2.md | M0–M2 全面审计记录（发现/修复/复验证据/残余缺口） | ✅ 2026-10-18 |
 | data/README.md | 依据查证记录（三态）/ 数据源可获取性 / 合成数据纪律 / 数值口径 | ✅ v1 |
 | .gitignore / .gitattributes / LICENSE / README.md | 工程基座 | ✅ M0 |
-| pyproject.toml / src/ / tests/ / tools/ | 可安装骨架、CLI 契约、fixture 生成器与基准 | ✅ M0 骨架（功能待 M1–M5） |
-| data/fixtures/fidelity/ + expect.json | 10 个注入缺陷的合成仓库 + golden JSON（M1） | ⬜ 待 M1 |
+| pyproject.toml / src/ / tests/ / tools/ | 可安装骨架、CLI 契约、fixture 生成器与基准；`fidelity` 已实现，其余四模块仍为骨架态 | 🔶 M0 骨架 + M2 fidelity |
+| data/fixtures/{fidelity,parity,ledger}/ | 12 + 6 + 3 个合成仓库的生成脚本 + golden JSON（`--check` 位级一致） | ✅ M1/M2 |
 | data/fixtures/parity/ · ledger/ | 跨分支三态矩阵、revert 三状态 fixture（M3/M4） | ⬜ 待 M3 |
 | bench/fidelity.json | 单进程批量 vs 逐进程基准（M2） | ✅ M2；parity/gate 待 M3/M5 |
 | audit-baseline.toml | 基线样例（`expires` + `justification`，M5） | ⬜ 待 M5 |
@@ -62,7 +63,7 @@
 | 2026-10-18 | **"删掉一段内容"归 DROPPED，不归 SMUGGLED**（M1 定案） | 与题面 §一 的语义一致（吞掉 = 手工删掉本应保留的 hunk）。据此把 `smuggle-delete-guard` 改名 `drop-guard-check` 并归入吞掉类，另补 `smuggle-new-file` 保持"夹带 4 / 吞掉 3"的分布。 |
 | 2026-10-18 | **parity 的 apply 兜底挂 A（源侧）**（M1 定案，推翻 plan/03 初稿） | 候选提交来自 B，挂 B 侧做反向检查会恒成功、三态退化成恒 PRESENT。挂 A 才有信息量："这个改动在 A 里了吗"。另定：patch-id 用 `-U0`（等价），apply 检查用 `-U3`（存在性，`-U0` 无上下文会过宽）。 |
 | 2026-10-18 | **`path-remap` 判 MISSING 而非 PRESENT**（M1 实测推翻设想） | 路径参与 patch-id，apply 也按路径匹配；"别处有同内容"不构成 PRESENT。只加 `note=content_equivalent_at_other_path`（只提示不改判定）。 |
-| 2026-10-18 | **fidelity 首期 11 个 fixture（含 1 个反例守护）** | 题面 10 个 + `drop-then-readd`（重引入抑制反例）。生成器在**生成期**把每个 fixture 的声明计数与 oracle 复算对账，不符即失败（植入器自证）。 |
+| 2026-10-18 | **fidelity 首期 11 个 fixture（含 1 个反例守护）**（M2 追加第 12 个：`custom-driver`，见下一行） | 题面 10 个 + `drop-then-readd`（重引入抑制反例）。生成器在**生成期**把每个 fixture 的声明计数与 oracle 复算对账，不符即失败（植入器自证）。 |
 | 2026-10-18 | **`custom-driver` fixture 推迟到 M2** | 需要一个跨平台可用的 merge driver 命令，与 `SKIPPED(custom_driver)` 判定同步落地更省一轮；已记入 `plan/HANDOFF-M2.md`，不静默漏掉。 |
 | 2026-10-18 | **M2 起实现 `fidelity`：分类口径落地为"单方向 + 按形态"** | `git diff -U0 <mechanical_tree> <recorded_tree>`：含冲突标记 → RESOLUTION、含 `+` → SMUGGLED、只含 `-` → DROPPED。实测 12 个 fixture 的 payload 与 M1 独立 oracle 算出的 golden 逐项一致。 |
 | 2026-10-18 | **`range_str` 的零计数侧写 `-`** | `count == 0`（纯插入/纯删除）时该侧没有行号区间 → `-`。这是 golden 与生产实现的第一个对不上的点（实测抓出），已把口径写进 `canonical.range_str` 的 docstring 与测试。 |
@@ -94,7 +95,7 @@
 | 合成 fixture 可重建 | `tools/gen_fixtures.py`（固定作者/时间/树） | `data/fixtures/` | `--check` 重生成逐字节一致（实测 20/20，2026-10-18） | ✅ M1 |
 | 报告样例与基线样例 | 规范 JSON + TOML | `docs/report-sample.json`、`audit-baseline.toml` | 文件存在 + `--verify` 通过 | ⬜ 待 M5 |
 | README 三场景复现 | 场景命令 | `README.md` | 干净 clone 按 README 跑通 | ⬜ 待 M6 |
-| 测试覆盖 | `tests/` | `pytest` | 三类 hunk/patch-id/三态/revert/verify/退出码 | ⬜ 待 M2–M5 |
+| 测试覆盖 | `tests/` | `pytest`（含 `slow` 标记的生成器确定性层） | 三类 hunk ✅ M2；patch-id/三态 ⬜ M3；revert ⬜ M4；`--verify`/退出码 ⬜ M5 | 🔶 进行中 |
 
 ## 里程碑
 

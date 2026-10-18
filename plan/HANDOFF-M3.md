@@ -49,6 +49,7 @@
 | K28 | 三态优先级固定：`patchid` → `apply --reverse` → `apply` → `MODIFIED`；`basis` 字段必填 | `plan/03` §2.2 |
 | K29 | `patch_parity` 分母 0 → `null`（不记 1.0） | `data/README.md` §4.4 |
 | K30 | 临时 worktree **成功/异常两条路径都清理**（remove --force → prune → rmtree），报告不落绝对路径 | `gitobj.temporary_worktree` + 测试 |
+| K31 | **输入类错误 → 退出码 2，环境类 → 3**：解不出来的引用（`--from/--to/--since/--until`）是用法错误，不是"这台机器做不了" | M2 审计实修（`fidelity.require_ref` / `validate_range_spec`）；parity 的 `--from/--to` 照此办理 |
 
 ## 4. 本机环境坑（2026-10-18 实测；引用前先复测）
 

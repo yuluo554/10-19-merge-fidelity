@@ -167,6 +167,63 @@ def test_since_range_keeps_the_merge():
     assert report["summary"]["merges_scanned"] == 1
 
 
+def test_range_spec_is_honoured():
+    repo = _repo("smuggle-extra-line")
+    report = fidelity.scan(repo, range_spec="HEAD^1..HEAD")
+    assert report["summary"]["merges_scanned"] == 1
+    assert report["range"]["kind"] == "range"
+    assert report["range"]["spec"] == "HEAD^1..HEAD"
+
+
+def test_pinned_config_beats_user_config(monkeypatch):
+    """判定相关配置已钉死：用户/仓库级 `merge.conflictStyle=zdiff3` 不得改变结果。
+
+    实测依据：未钉死时该配置会把机械树 OID 从 `51683564511b…` 改成 `0f5a5d03ff9a…`。
+    变异验证：把 `gitobj.CONFIG_OVERRIDES` 里的 `merge.conflictStyle=merge` 删掉，本测试必须变红。
+    """
+    monkeypatch.setenv("GIT_CONFIG_COUNT", "1")
+    monkeypatch.setenv("GIT_CONFIG_KEY_0", "merge.conflictStyle")
+    monkeypatch.setenv("GIT_CONFIG_VALUE_0", "zdiff3")
+    report = fidelity.scan(_repo("smuggle-extra-line"))
+    record = report["merges"][0]
+    golden = _golden("smuggle-extra-line")["merges"][0]
+    assert record["mechanical_tree"] == golden["mechanical_tree"]
+    assert record["counts"] == golden["counts"]
+    assert "merge.conflictStyle=merge" in report["config_overrides"]
+
+
+def test_bench_tool_runs_and_writes_json(tmp_path):
+    import subprocess as sp
+
+    out = tmp_path / "bench.json"
+    proc = sp.run([sys.executable, "-X", "utf8", os.path.join(ROOT, "tools", "bench_fidelity.py"),
+                   "--out", str(out), "--only", "smuggle-extra-line", "--repeats", "1",
+                   "--merges", "2"],
+                  cwd=ROOT, stdout=sp.PIPE, stderr=sp.STDOUT)
+    assert proc.returncode == 0, proc.stdout.decode("utf-8", "replace")
+    payload = json.loads(out.read_text(encoding="utf-8"))
+    assert payload["git_version"].startswith("git version")
+    assert payload["fixtures"][0]["fixture"] == "smuggle-extra-line"
+    assert payload["synthetic_many_merges"]["merges"] == 2
+
+
+def test_bad_revision_is_usage_error_not_environment():
+    """坏 rev 归用法错误（2），不是环境不满足（3）——否则"参数写错"会被读成"机器做不了"。"""
+    from mergefidelity.errors import UsageError
+
+    repo = _repo("smuggle-extra-line")
+    for kwargs in ({"since": "no-such-rev"}, {"until": "no-such-rev"},
+                   {"range_spec": "no-such-rev..HEAD"}, {"range_spec": "HEAD..no-such-rev"}):
+        with pytest.raises(UsageError):
+            fidelity.scan(repo, **kwargs)
+
+
+def test_bad_revision_cli_exit_code_is_2(capsys):
+    code = cli.main(["fidelity", "scan", _repo("smuggle-extra-line"), "--since=no-such-rev"])
+    assert code == 2
+    assert "不是有效引用" in capsys.readouterr().err
+
+
 def test_bad_as_of_is_usage_error():
     from mergefidelity.errors import UsageError
 

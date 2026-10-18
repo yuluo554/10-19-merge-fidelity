@@ -87,6 +87,10 @@
 - [ ] **CI 绿** —— 未接远端，**写"本地等价校验（待首推验证）"**，M6 首推后据实补记 run id
 - [ ] `custom-driver` fixture —— **顺延到 M2**（与 `SKIPPED(custom_driver)` 判定同步落地），如实计入 M2 待办
 
+**M2 收尾补记（追加事实，不改上文原文）**：`custom-driver` fixture 与 `SKIPPED(custom_driver)`
+判定已在 M2 同轮落地（`.gitattributes` + `git merge-file --union` 作 driver），fidelity 现为 12 个 fixture；
+上面这条「顺延」已闭环，见 `plan/HANDOFF-M3.md` §1/§5。
+
 ## 6. 关键命令速查
 
 ```bash

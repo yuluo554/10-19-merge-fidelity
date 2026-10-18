@@ -29,8 +29,21 @@ GIT_MIN_LEDGER = (2, 16)
 
 GIT_TIMEOUT_SECONDS = 60
 
-# 固定注入的 -c 覆盖项（会登记进报告头的 config_overrides）
-CONFIG_OVERRIDES = ("core.quotepath=false", "core.pager=cat")
+# 固定注入的 -c 覆盖项（会登记进报告头的 config_overrides）。
+#
+# 为什么要钉死这几项：**用户/仓库级 git 配置会改变判定结果**——实测
+# `merge.conflictStyle=zdiff3` 会让同一 merge 的机械树 OID 变化
+# （默认 51683564511b… → zdiff3 0f5a5d03ff9a…），而机械树是 finding 的判定输入。
+# 因此"同一仓库同一范围在任何机器上结果一致"要求把这些开关固定下来并写进报告头。
+CONFIG_OVERRIDES = (
+    "core.quotepath=false",      # 路径按原样输出（不用八进制转义）
+    "core.pager=cat",            # 不依赖用户分页器
+    "core.autocrlf=false",       # 不做事性换行转换
+    "core.eol=lf",
+    "diff.algorithm=myers",      # hunk 边界由算法决定 → 钉死
+    "diff.noprefix=false",       # 解析器依赖 a/ b/ 前缀
+    "merge.conflictStyle=merge",  # 冲突标记形态决定 RESOLUTION 判定与机械树 OID
+)
 
 _VERSION_RE = re.compile(r"(\d+)\.(\d+)(?:\.(\d+))?")
 

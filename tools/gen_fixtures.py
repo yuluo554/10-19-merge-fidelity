@@ -43,11 +43,16 @@ STEP_SECONDS = 60
 GENERATOR_VERSION = "1"
 REPO_DIR_NAME = "repo"  # 合成仓库在 fixture 目录下的子目录名（不入仓）
 
+# 与生产实现 `gitobj.CONFIG_OVERRIDES` **同一组判定相关开关**（两份独立实现，靠 golden 对账）。
+# 若不同步，`merge.conflictStyle=zdiff3` 这类用户配置会让生成侧与生产侧算出不同的机械树。
 GIT_BASE = [
     "-c", "core.autocrlf=false",
     "-c", "core.eol=lf",
     "-c", "core.quotePath=false",
     "-c", "core.pager=cat",
+    "-c", "diff.algorithm=myers",
+    "-c", "diff.noprefix=false",
+    "-c", "merge.conflictStyle=merge",
     "-c", "commit.gpgsign=false",
     "-c", "advice.detachedHead=false",
 ]
