@@ -159,3 +159,7 @@ tmp-worktree-*/
 
 # 私有资料与本地笔记
 _private/
+
+# 合成 fixture 仓库本体是生成物（golden 与生成器入仓，仓库不入仓）
+data/fixtures/**/.git/
+data/fixtures/**/repo/

@@ -1,0 +1,17 @@
+# 源码与文档一律 LF（跨平台逐字节比较的前提）
+* text=auto eol=lf
+
+# 会被逐字节比较的产物/黄金文件：显式 LF
+*.py     text eol=lf
+*.md     text eol=lf
+*.toml   text eol=lf
+*.json   text eol=lf
+*.yml    text eol=lf
+*.yaml   text eol=lf
+LICENSE  text eol=lf
+
+# 合成 fixture 仓库的 golden 必须保持 LF（生成器写死 LF；比对逐字节）
+data/fixtures/**/expect.json  text eol=lf
+
+# 生成物目录不入仓，但万一被 git 看到也不做 EOL 改写
+build/**  -text

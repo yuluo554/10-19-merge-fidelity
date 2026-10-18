@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mergefidelity"
+version = "0.1.0.dev0"
+description = "Merge 保真度审计：用 git 自己的合并引擎复算机械合并，逐 blob 对比实际记录的树"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+authors = [{ name = "yuluo554", email = "282769740+yuluo554@users.noreply.github.com" }]
+keywords = ["git", "merge", "audit", "evil-merge", "backport", "reproducible"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Version Control :: Git",
+    "Topic :: Software Development :: Quality Assurance",
+]
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=7,<9", "pyyaml>=6"]
+
+[project.scripts]
+mergefidelity = "mergefidelity.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/yuluo554/10-19-merge-fidelity"
+Issues = "https://github.com/yuluo554/10-19-merge-fidelity/issues"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+filterwarnings = ["error::DeprecationWarning:mergefidelity.*"]

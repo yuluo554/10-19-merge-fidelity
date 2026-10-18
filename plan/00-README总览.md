@@ -12,9 +12,15 @@
 |---|---|---|
 | plan/00-README总览.md | 本文档：索引 / 决策记录 / 弃选项 / 承诺-证据台账 / 里程碑 | ✅ v1 |
 | plan/01-题目文档.md | 十段式题目定稿（含招牌动词表、含金量锚点、边界与非目标） | ✅ v1 |
+| plan/02-架构与技术选型.md | 分层架构、git 访问层、确定性架构、退出码契约、选型与弃选 | ✅ v1 |
+| plan/03-模块详设.md | 五子命令 + 共享层的接口、数据结构、处理顺序、失败路径、测试点 | ✅ v1 |
+| plan/04-数据计划.md | 生成器确定性纪律、19 个 fixture 设计、golden 纪律、bench | ✅ v1 |
+| plan/05-里程碑.md | 每周可演示物、出口门、环境事实、风险预案 | ✅ v1 |
+| plan/06-交付对标.md | 题面 §三/§四逐条落位、待定决策表、发布前检查清单 | ✅ v1 |
+| plan/HANDOFF-M1.md | 下一棒（数据先行）交接快照 | ✅ M0 收尾 |
 | data/README.md | 依据查证记录（三态）/ 数据源可获取性 / 合成数据纪律 / 数值口径 | ✅ v1 |
-| .gitignore | Python 标准模板（含临时 worktree、`*.db`） | ✅ v1 |
-| pyproject.toml / src/ / tests/ / tools/ | 可安装骨架、CLI 契约、fixture 生成器与基准（M1 起逐模块落地） | ⬜ 待 M1 |
+| .gitignore / .gitattributes / LICENSE / README.md | 工程基座 | ✅ M0 |
+| pyproject.toml / src/ / tests/ / tools/ | 可安装骨架、CLI 契约、fixture 生成器与基准 | ✅ M0 骨架（功能待 M1–M5） |
 | data/fixtures/fidelity/ + expect.json | 10 个注入缺陷的合成仓库 + golden JSON（M1） | ⬜ 待 M1 |
 | data/fixtures/parity/ · ledger/ | 跨分支三态矩阵、revert 三状态 fixture（M3/M4） | ⬜ 待 M3 |
 | bench/*.json | 单进程批量 vs 逐进程基准（M2） | ⬜ 待 M2 |
@@ -43,6 +49,14 @@
 | 2026-10-17 | 弃选："bus factor / 贡献分布" | hercules、gitinspector 已占，且与 merge 保真度无关。 |
 | 2026-10-17 | 弃选："自动修复 / 自动重放 merge" | 会写对象、改引用，违反只读红线；且自动修复的错误代价远高于报告一条 finding。 |
 | 2026-10-17 | 形态定案：纯 CLI，单一形态 | 输出是规范 JSON + 可选 Markdown 摘要，接入 CI 与本地终端；不做 GUI/桌面/Web 服务，避免空壳形态与额外分发负担。 |
+| 2026-10-18 | **许可证 = MIT**（用户拍板） | 仓库内提供 `LICENSE`；README 与 `pyproject` 的 license 字段三处一致。 |
+| 2026-10-18 | **Python 底线 = 3.8**（用户拍板） | 本机有 3.8.8 / 3.12.10；CI 跑 `{windows,ubuntu} × {3.8,3.12}`。代价：无 `tomllib`，基线 TOML 自写受限子集解析器，超集形态显式 `toml_unsupported`（退出码 2）。 |
+| 2026-10-18 | **Release 附件 = 手工源码包**（用户拍板） | `git archive <tag>` + `gzip -9n` + `SHA256SUMS`；两次构建逐字节一致，sha256 只写 Release 正文，不写进包内。 |
+| 2026-10-18 | **`merge-tree` 必须隔离对象目录**（实测发现） | `merge-tree --write-tree` 会向对象库写 tree/blob（实测 `.git/objects` 文件数增加）。为兑现"只读 `.git`"，调用时设 `GIT_OBJECT_DIRECTORY=<tmp>` + `GIT_ALTERNATE_OBJECT_DIRECTORIES=<repo>/.git/objects`，用完删临时目录；测试断言前后对象数不变。 |
+| 2026-10-18 | **octopus 判定不依赖 stderr** | 实测 `remerge-diff` 对 octopus 只在 stderr 打 `Skipping remerge-diff for octopus merges.`、payload 为空。以**父提交数 >2** 为唯一判据，stderr 仅作交叉核对。 |
+| 2026-10-18 | **`-U0` patch-id 对路径敏感**（实测发现） | 同内容不同路径 → 不同 patch-id。`parity` 的 `PRESENT` 因此要区分 `basis=patchid`（路径相同）与 `basis=patchid + note=path_remapped`（路径不同），不把"内容相同"直接当成"已搬过去"。 |
+| 2026-10-18 | **`report` 默认不含 parity** | parity 需要两个显式引用，不能从单仓库默认推导；未给 `--parity-from/--parity-to` 时该节为 `null` 并在 `notes` 写 `parity_not_requested`，不伪造空结果。 |
+| 2026-10-18 | **M0 骨架采用"可运行空壳"而非假结果** | 五子命令在 M0 即注册并可 `--help`；未实现的模块返回**退出码 2 + 明确中文提示**（"本模块将在 M2 落地"），**不输出伪造空 JSON**。每个模块落地时**同轮退役**该提示。 |
 
 ## 承诺-证据台账
 
@@ -71,7 +85,7 @@
 
 | 里程碑 | 内容 | DoD |
 |---|---|---|
-| M0 | 出题定稿 + 骨架 | plan/00、plan/01、data/README、.gitignore 齐；中文首提交已验证 |
+| M0 | 出题定稿 + 骨架 | plan/00–06 齐；可安装 CLI（五子命令可 `--help`）；`pytest` 双解释器全绿；退出码契约锁进测试；`LICENSE`/`.gitattributes`/README 基座 |
 | M1 | 数据先行 | `tools/gen_fixtures.py` 可重建 10 个注入缺陷的合成仓库（夹带 4 / 吞掉 3 / 正确冲突解决 2 / octopus 1）+ 各自 `expect.json` golden；两台机器重建后 commit OID 一致 |
 | M2 | fidelity | `fidelity` 子命令可用；10 个 fixture 输出与 golden 逐字节一致；连跑两次一致；octopus 输出 `SKIPPED` 且退出码 0；`bench/fidelity.json` 产出 |
 | M3 | parity | `parity` 子命令可用；双向 release/main 三态矩阵全对；`-U0` 跨行号/空白等价断言通过；临时 worktree 成功与异常路径均无残留 |

@@ -133,7 +133,9 @@ Finding ID = sha1(merge_oid ‖ path ‖ old_range ‖ new_range ‖ kind)
 ```
 
 - 拼接顺序固定为上述五项，分隔符固定为单个 `\x1f`（Unit Separator），编码 UTF-8，`kind` 取 `SMUGGLED` / `DROPPED` / `REVERTED_NO_SUCCESSOR` / `REVERTED_THEN_REDONE` / `REVERT_UNVERIFIED` / `PARITY_MISSING` / `PARITY_MODIFIED`。
-- `old_range` / `new_range` 格式固定为 `<start>,<count>`（0 基，与 git hunk 头一致）；无对应侧时写 `-`。
+- `old_range` / `new_range` 格式固定为 `<start>,<count>`，**行号 0 基**：`count > 0` 时
+  `start = git hunk 头行号 - 1`；`count == 0`（纯增/纯删的插入点）时 `start` 直接取 git 行号。
+  无对应侧时写 `-`。
 - ID 不包含提交时间、扫描时刻、主机名、绝对路径；同一 finding 在任何机器上重算必须相同。
 
 ### 4.6 报告 digest 与 `--verify`
