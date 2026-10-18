@@ -164,6 +164,35 @@ def test_merge_tree_conflict_entries_have_three_stages(tmp_path):
     assert all(entry["path"] == "f.txt" for entry in mechanical.entries)
 
 
+# ---------------------------------------------------------------- 临时对象目录清理
+
+def _temp_object_dirs():
+    import glob
+    import tempfile
+    return set(glob.glob(os.path.join(tempfile.gettempdir(), "mf-obj-*")))
+
+
+def test_temp_object_dir_is_removed_on_success(tmp_path):
+    """`merge-tree` 写出的只读对象不得让临时目录残留（Windows 上实测踩到）。"""
+    repo = _conflict_merge_repo(tmp_path)
+    p1, p2 = gitobj.rev_parse(repo, "HEAD^1"), gitobj.rev_parse(repo, "HEAD^2")
+    base = gitobj.rev_parse(repo, "HEAD^^")
+    before = _temp_object_dirs()
+    gitobj.merge_tree(repo, base, p1, p2)
+    assert _temp_object_dirs() - before == set(), "成功路径后临时对象目录必须删除"
+
+
+def test_temp_object_dir_is_removed_on_exception(tmp_path):
+    repo = _conflict_merge_repo(tmp_path)
+    p1, p2 = gitobj.rev_parse(repo, "HEAD^1"), gitobj.rev_parse(repo, "HEAD^2")
+    base = gitobj.rev_parse(repo, "HEAD^^")
+    before = _temp_object_dirs()
+    with pytest.raises(RuntimeError):
+        with gitobj.MechanicalMerge(repo, base, p1, p2):
+            raise RuntimeError("boom")
+    assert _temp_object_dirs() - before == set(), "异常路径后临时对象目录必须删除"
+
+
 # ---------------------------------------------------------------- worktree
 
 def test_temporary_worktree_cleans_up_on_success(tmp_path):

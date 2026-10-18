@@ -266,7 +266,7 @@ class TempObjects(object):
 
     def __exit__(self, exc_type, exc, tb):
         if self.path:
-            shutil.rmtree(self.path, ignore_errors=True)
+            rmtree(self.path)
         self.path = None
         self.env = None
         return False
@@ -651,7 +651,7 @@ def apply_check(repo, ref, patch_text, reverse=False):
         if os.path.isdir(tmp):
             git(repo.path, ["worktree", "remove", "--force", tmp], check=False)
             git(repo.path, ["worktree", "prune"], check=False)
-            shutil.rmtree(tmp, ignore_errors=True)
+            rmtree(tmp)
 
 
 def parity_expect(repo, from_ref, to_ref):
@@ -1468,7 +1468,7 @@ def check(root):
                         diffs.append("%s 仓库不存在：%s" % (label, rel_repo))
         return diffs
     finally:
-        shutil.rmtree(tmp, ignore_errors=True)
+        rmtree(tmp)
 
 
 # --------------------------------------------------------------------------- CLI

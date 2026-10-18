@@ -122,8 +122,8 @@ def main(argv=None):
     }
 
     if args.merges > 1:
-        import shutil
         import tempfile
+        from gen_fixtures import rmtree  # 只读对象也能删（Windows）
         tmp = tempfile.mkdtemp(prefix="mf-bench-")
         try:
             repo = build_merge_rich_repo(os.path.join(tmp, "many"), args.merges)
@@ -135,7 +135,7 @@ def main(argv=None):
                 "payload_per_merge": _time(lambda: _payload_per_merge(repo), repeats=args.repeats),
             }
         finally:
-            shutil.rmtree(tmp, ignore_errors=True)
+            rmtree(tmp)
 
     if args.repo:
         repo = args.repo

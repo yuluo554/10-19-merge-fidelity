@@ -228,6 +228,44 @@ def attributes_oid(repo, treeish):
     return None
 
 
+def _rmtree_force(path):
+    """删除目录树，先解除只读位再删（Windows 上 git 对象是只读的）。
+
+    实测（2026-10-18，git 2.54.0.windows.1）：`shutil.rmtree(ignore_errors=True)` 对
+    `merge-tree` 写出的只读对象**静默失败**，临时目录会一直堆积（本轮实测堆积 1466 个）。
+    因此这里对每个失败项 `chmod` 后重试，并在最后按"目录是否还在"再兜一次。
+    """
+    if not os.path.isdir(path):
+        return
+
+    def _on_error(func, target, _exc_info):
+        try:
+            os.chmod(target, 0o700)
+        except OSError:
+            pass
+        try:
+            func(target)
+        except OSError:
+            pass
+
+    for _ in range(2):
+        try:
+            shutil.rmtree(path, onexc=lambda func, target, exc: _on_error(func, target, exc))
+        except TypeError:  # Python 3.8–3.11 没有 onexc
+            shutil.rmtree(path, onerror=_on_error)
+        except OSError:
+            pass
+        if not os.path.isdir(path):
+            return
+        # 第二轮前把整棵树先放开权限（父目录被设成只读时上面的逐项回调救不回来）
+        for dirpath, dirnames, filenames in os.walk(path):
+            for name in dirnames + filenames:
+                try:
+                    os.chmod(os.path.join(dirpath, name), 0o700)
+                except OSError:
+                    pass
+
+
 class TempObjectDir(object):
     """把 ``merge-tree`` 的对象写入重定向到临时目录。
 
@@ -259,8 +297,8 @@ class TempObjectDir(object):
         }
 
     def __exit__(self, exc_type, exc, tb):
-        if self.path and os.path.isdir(self.path):
-            shutil.rmtree(self.path, ignore_errors=True)
+        if self.path:
+            _rmtree_force(self.path)
         self.path = None
         return False
 
@@ -368,8 +406,7 @@ class _TemporaryWorktree(object):
         if self.path:
             run_git(self.repo, ["worktree", "remove", "--force", self.path], check=False)
             run_git(self.repo, ["worktree", "prune"], check=False)
-            if os.path.isdir(self.path):
-                shutil.rmtree(self.path, ignore_errors=True)
+            _rmtree_force(self.path)
             self.path = None
         return False
 

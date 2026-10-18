@@ -15,10 +15,11 @@
 | `note` 不改判定 | ✅ | `path-remap` 断言 `status=MISSING` 且 `note=content_equivalent_at_other_path`（`equivalent_source` 指向 A 侧同内容提交） |
 | worktree 纪律 | ✅ | 成功与人为异常两条路径后 `git worktree list` 只剩主工作树；`--no-apply-fallback` **零 worktree**；报告 0 绝对路径 |
 | 骨架态退役 | ✅ | `parity.py` 的 `NotReadyError` 已删；骨架登记测试只剩 ledger/report/gate；`test_cli.py` 的 not-ready 参数同步缩小 |
+| 临时目录零残留（审计抓出的真缺陷） | ✅ | `merge-tree` 的只读对象让 `rmtree(ignore_errors=True)` 静默失败 → 临时目录堆积 **1466 个**（实测）。修 `gitobj._rmtree_force`（解只读位 + 二轮兜底）并统一到 `TempObjectDir` / `temporary_worktree` / 生成器 / bench；新增 2 条守门测试（成功与异常路径后 `mf-obj-*` 计数不变） |
 | 基准 | ✅ | `bench/parity.json`：6 fixture 端到端 + `--no-apply-fallback` 对比（量化临时 worktree 固定开销） |
 | CI 接线 | ✅ | 新增 step `CLI smoke (parity on generated fixtures)`（`set +e` + 断言退出码 0 + 断言 `candidates=4/present=1`）；workflow 本地 `yaml.safe_load` 通过（8 step） |
 | 输入类错误归 2 | ✅ | 解不出来的 `--from/--to` → `UsageError`（退出码 2），不是 3（K31 落地） |
-| 测试规模 | ✅ | 快层 **169 passed** ×（3.8 / 3.12）；慢层（`--check` 重生成 21 个仓库）1 passed |
+| 测试规模 | ✅ | 快层 **171 passed** ×（3.8 / 3.12）；慢层（`--check` 重生成 21 个仓库）1 passed |
 
 **本地等价校验（未接远端，CI 待首推验证）**：双解释器快层、3.8 慢层、`--check` CLI 实跑、workflow 本地解析、parity CLI 冒烟。
 **不可本机实跑**：Linux/macOS 的 `git apply`/`worktree` 行为差异（首份跨平台证据仍由 CI 首推给出）。
@@ -42,7 +43,7 @@
 4. `tools/bench_ledger.py` → `bench/ledger.json`（条目数 / 耗时）。
 5. 收尾：DoD 验证 → 回写 `plan/00`/`plan/03`/`plan/04`/`plan/05`/`plan/06`/README → 写 `plan/HANDOFF-M5.md` → commit。
 
-## 3. 既定口径清单（K1–K31 见前几份 HANDOFF，本棒新增 K32–K36）
+## 3. 既定口径清单（K1–K31 见前几份 HANDOFF，本棒新增 K32–K37）
 
 | # | 口径 | 落点 |
 |---|---|---|
@@ -51,6 +52,7 @@
 | K34 | **`--no-apply-fallback` 下 patch-id 不等 → `MODIFIED(basis=patchid)`**（没有 apply 证据就不声称"缺失"）。**本棒按 `plan/03` §2.2 的"第三态标 MODIFIED"落地，取代 `HANDOFF-M3` 待办第 1 条里"只给 PRESENT/MISSING"的简写**——那两句互相矛盾，已统一并在 `plan/00` 决策记录表留痕 | `plan/03` §2.2、README「已知边界」、`test_parity.py` |
 | K35 | **`--from/--to` 解不出来 → 退出码 2**（输入类错误，不是环境类；照 K31 办理） | `parity._resolve_refs`（复用 `fidelity.require_ref`）、`test_parity.py` |
 | K36 | **临时 worktree per invocation 只创建一次**；`worktree: {created, reason}` 进报告（**路径不进报告**）；无候选时不创建 | `parity.parity_scan`、`test_parity.py` |
+| K37 | **删除临时目录必须解只读位**：`shutil.rmtree(ignore_errors=True)` 对 `merge-tree` 写出的只读对象在 Windows 上静默失败（实测堆积 1466 个）；统一用 `gitobj._rmtree_force`（`chmod` 重试 + 二轮兜底） | `gitobj._rmtree_force`、`test_gitobj.py`（成功/异常两路径）、生成器与 bench |
 
 ## 4. 本机环境坑（2026-10-18 实测；引用前先复测）
 

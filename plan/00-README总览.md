@@ -77,6 +77,7 @@
 | 2026-10-18 | **M3 起实现 `parity`：候选顺序取 `git rev-list` 原序**（`plan/03` §2.2 笔误已更正） | golden（M1 oracle）与 `git rev-list --cherry-pick --right-only` 的输出顺序逐条一致；原 §2.2 写的"按 `(commit_time, oid)` 排序"与 golden 冲突。定案：**以 rev-list 原序为准**（它就是候选集的产生者，且已冻结进 golden），`rev-list` 侧排序不引入额外口径；`--cherry-pick` 的候选条数与 `git cherry -v` 交叉核对（不一致只记 `warnings`，不失败）。 |
 | 2026-10-18 | **`parity` 的 `note` 与 `status` 解耦**（M3 定案，细化 K27） | `equivalent_source` 分两种：判 `PRESENT` 时指向 A 侧同 `-U0` patch-id 的提交；`note=content_equivalent_at_other_path` 时指向 A 侧含同内容行的提交（**只提示**，`status` 仍由定义式给出，path-remap 场景仍是 `MISSING`）。 |
 | 2026-10-18 | **`parity --no-apply-fallback` 下 patch-id 不等 → `MODIFIED(basis=patchid)`** | 没有 apply 证据就**不声称**"缺失"；MISSING 的判据是 `apply --check` 成功，缺证时不能靠 patch-id 差异反推。`basis` 仍是必填字段（值域 `patchid`/`apply`）。 |
+| 2026-10-18 | **临时对象目录的删除必须解只读位**（M3 实测抓出的真缺陷） | `git merge-tree --write-tree` 写出的对象是**只读**的，`shutil.rmtree(ignore_errors=True)` 在 Windows 上**静默失败**——本轮实测系统临时目录里堆积了 **1466 个** `mf-obj-*`。修法：`gitobj._rmtree_force()` 逐项 `chmod 0o700` 后重试、并用"目录是否还在"再兜一轮；`TempObjectDir`、`temporary_worktree`、生成器与 bench 三处全部改用它，并新增 2 条守门测试（成功/异常两路径后临时目录计数不变）。变异验证：退回 `ignore_errors=True` → 新测试变红。 |
 
 ## 承诺-证据台账
 

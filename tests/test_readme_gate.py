@@ -24,7 +24,7 @@ TESTS = os.path.join(ROOT, "tests")
 # 冻结 stdlib 名单（不用 sys.stdlib_module_names：那是 3.10+，3.8 上取空集会全量假红）
 STDLIB = frozenset("""
 argparse ast binascii bisect calendar collections collections.abc contextlib copy csv dataclasses
-datetime decimal difflib enum errno fnmatch fractions functools getpass gzip hashlib heapq hmac
+datetime decimal difflib enum errno fnmatch fractions functools getpass glob gzip hashlib heapq hmac
 html http importlib inspect io ipaddress itertools json keyword linecache locale logging marshal
 math mimetypes numbers operator os os.path pathlib pickle platform plistlib posixpath pprint
 queue random re secrets shlex shutil signal socket sqlite3 stat statistics string struct subprocess
