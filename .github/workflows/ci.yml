@@ -59,3 +59,13 @@ jobs:
           set -e
           test "$code" = "0"
           python -c "import json;d=json.load(open('parity-report.json'));assert d['candidates']==4 and d['present']==1 and d['missing']==2 and d['modified']==1, d"
+
+      - name: "CLI smoke (ledger on generated fixtures)"
+        shell: bash
+        run: |
+          set +e
+          mergefidelity ledger data/fixtures/ledger/then-redone/repo > ledger-report.json
+          code=$?
+          set -e
+          test "$code" = "0"
+          python -c "import json;d=json.load(open('ledger-report.json'));assert d['counts']=={'no_successor':0,'then_redone':1,'unverified':0}, d"

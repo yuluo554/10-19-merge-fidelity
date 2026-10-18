@@ -453,16 +453,42 @@ def patch_id(repo, diff_text):
     return result.stdout.split()[0]
 
 
-def commit_diff(repo, rev, *, context=0, path=None):
-    """单个提交的 diff 文本（根提交走 `--root`）。``--`` 必须排在 revisions 之后。"""
+def commit_diff(repo, rev, *, context=0, path=None, reverse=False):
+    """单个提交的 diff 文本（根提交走 `--root`）。``--`` 必须排在 revisions 之后。
+
+    ``reverse=True`` 给出**取反**的 diff（`diff-tree <rev> <rev>^`，即"撤销该提交"的
+    改动）——`ledger` 用它算被回滚提交的反向 `-U0` patch-id。根提交没有父提交、
+    取反无意义，此时返回 ``None``（调用方据此判该提交不可校验）。
+    """
+    has_parent_commit = has_parent(repo, rev)
+    if reverse and not has_parent_commit:
+        return None
     args = ["diff-tree", "-p", "-U%d" % context, "--no-renames"]
-    if has_parent(repo, rev):
-        args += ["%s^" % rev, str(rev)]
+    if has_parent_commit:
+        if reverse:
+            args += [str(rev), "%s^" % rev]
+        else:
+            args += ["%s^" % rev, str(rev)]
     else:
         args += ["--root", str(rev)]
     if path:
         args += ["--", path]
     return run_git(repo, args).stdout
+
+
+def changed_blob_oids(repo, rev):
+    """该提交改动涉及的 blob OID 集合（old/new 两侧都收，去重、保序）。
+
+    `ledger` 用它做 `--find-object` 候选筛选：一个被回滚的改动若在后续被重新落地，
+    落地提交必然触及同一批 blob。
+    """
+    out = run_git(repo, ["diff-tree", "-r", "-z", "--no-commit-id", "--raw", str(rev)]).stdout
+    oids = []
+    for token in out.replace("\x00", "\n").split():
+        if len(token) in (40, 64) and all(c in "0123456789abcdef" for c in token):
+            if token not in oids:
+                oids.append(token)
+    return oids
 
 
 def has_parent(repo, rev):

@@ -23,11 +23,11 @@
 | M1 | 数据先行：`tools/gen_fixtures.py` + 21 个合成 fixture 与 golden（`--check` 位级一致） | ✅ 已完成 |
 | M2 | `fidelity scan`：机械树复算 + `blob_fidelity` + 三类 hunk（12/12 fixture 与 golden 逐项一致） | ✅ 已完成 |
 | M3 | `parity`：跨分支三态（`-U0` patch-id + apply 兜底）；6 个 fixture 双向与 golden 逐项一致 | ✅ 已完成 |
-| M4 | `ledger`：revert / 复活账本 | ⬜ 未开工 |
+| M4 | `ledger`：revert / 复活账本（反向 patch-id 校验 + `--find-object` 重放）；3 个 fixture 与 golden 逐项一致 | ✅ 已完成 |
 | M5 | `report`（digest + `--verify`）/ `gate`（过期基线门禁） | ⬜ 未开工 |
 | M6 | 发布：公开仓库 + v0.1.0 tag + Release 附件 | ⬜ 未开工 |
 
-> `fidelity` 与 `parity` 已可用；`ledger` / `report` / `gate` **已注册并可 `--help`**，但尚未实现的
+> `fidelity`、`parity`、`ledger` 已可用；`report` / `gate` **已注册并可 `--help`**，但尚未实现的
 > 模块以**退出码 2 + 中文提示**收场，**不输出伪造的空结果**（每个模块落地时同轮退役该提示）。
 >
 > 开发进度与逐项证据见 `plan/00-README总览.md`（承诺-证据台账 + 里程碑表）与各 `plan/HANDOFF-*.md`。
@@ -44,7 +44,7 @@ Windows 上 `python` 可能是应用商店占位符，用 `py -3.8` / `py -3.12`
 
 ## 用法（最小复现命令）
 
-> `fidelity` 与 `parity` 已按下列形态可用；`gate` 的参数契约自 M0 起固定，功能里程碑落地后即可用。
+> `fidelity`、`parity`、`ledger` 已按下列形态可用；`gate` 的参数契约自 M0 起固定，功能里程碑落地后即可用。
 
 ```bash
 # 场景一：扫描一个仓库的全部 merge，看有哪些夹带/吞掉
@@ -57,6 +57,13 @@ mergefidelity parity /path/to/repo --from=release/1.0 --to=main --no-apply-fallb
 
 # 场景三：CI 门禁——只扫增量，基线内旧账不失败，过期旧账重新报警
 mergefidelity gate /path/to/repo --since=v0.1.0 --baseline=audit-baseline.toml --fail-on=smuggled
+```
+
+Revert / 复活账本同样一条命令：
+
+```bash
+mergefidelity ledger /path/to/repo                 # 记账全部 revert，判它们是被回滚后重做还是静默消失
+mergefidelity ledger /path/to/repo --range=v1.0..v1.1   # 只看某个范围内的 revert
 ```
 
 ## 退出码
@@ -98,6 +105,17 @@ mergefidelity gate /path/to/repo --since=v0.1.0 --baseline=audit-baseline.toml -
 | `worktree` | `{"created":bool,"reason":"apply_fallback"}`——临时 worktree 是否启用（报告落绝对路径**禁止**） |
 | `warnings[*]` | `CHERRY_COUNT_MISMATCH`：`rev-list` 与 `git cherry` 候选数不一致（只提示，不失败） |
 
+`ledger` 报告另含：
+
+| 字段 | 说明 |
+|---|---|
+| `entries[*].revert_oid` / `reverted_oid` | revert 提交 vs 它**正文声称**回滚的提交（`^This reverts commit <oid>`，不是解析标题） |
+| `entries[*].verified` | 反向 `-U0` patch-id 校验：revert 的 patch-id 是否等于被回滚提交 diff **取反**后的 patch-id。**它说的是"这条 revert 本身属实吗"**，不是重放结论 |
+| `entries[*].status` | 重放结论：`REVERTED_THEN_REDONE` / `REVERTED_NO_SUCCESSOR` / `REVERT_UNVERIFIED` |
+| `entries[*].successor_oid` | 复活该改动的提交（`-U0` patch-id 与原始相等）；无则 `null` |
+| `counts` | `{no_successor, then_redone, unverified}` |
+| `unavailable[*]` | 能力缺失（如 `--find-object` 需 git ≥2.16）：`{"reason":"git_too_old","capability":"find-object"}`——此时**不降级猜** successor。两种 `REVERT_UNVERIFIED` 靠它区分：非空 = 重放判不了（`verified` 仍可为 `true`）；为空 = 正文声称的回滚与实际 diff 对不上 |
+
 ## 已知边界（如实标注）
 
 - **octopus merge（父提交 >2）与自定义 merge driver 命中的路径**统一输出 `SKIPPED(reason=...)`：
@@ -121,6 +139,14 @@ mergefidelity gate /path/to/repo --since=v0.1.0 --baseline=audit-baseline.toml -
   ——没有 apply 证据就**不声称**"缺失"。
 - **`parity` 的判定 worktree 挂在源侧 A**：问的是"这个改动在 A 里了吗"；挂 B 侧会因候选本就
   来自 B 而恒成功、三态退化成恒 `PRESENT`。
+- **`ledger` 只认正文里 git revert 生成的那一行**：`^This reverts commit <oid>`。正文声称回滚 X
+  而实际 diff 回滚 Y 时，反向 patch-id 校验不过 → `REVERT_UNVERIFIED(verified=false)`，
+  **不猜意图**、也不算 successor。`--find-object`（git ≥2.16）只用于收窄 successor 候选，
+  **结论口径以 `-U0` patch-id 相等为准**，且**筛选集落空时会回到全量提交复扫**——
+  `--find-object` 认 blob 内容而 patch-id 对空白免疫，"只差空白"的重新落地会躲开筛选；
+  只做筛选就会静默漏报。能力缺失时记 `unavailable` 且不下"没有 successor"的结论
+  （此时 `status` 仍是 `REVERT_UNVERIFIED`，但 `verified` 是 `true`——"这条 revert 是真的、
+  是否被重做判不了"，与"正文对不上"是两回事）。
 - 临时 worktree 只用于 `parity` 的 apply 兜底，落在系统临时目录，每次调用只创建一次，
   成功/异常两条路径都清理。
 
