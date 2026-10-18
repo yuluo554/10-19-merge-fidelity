@@ -101,6 +101,18 @@ blob_fidelity(merge) = |{path : recorded_oid == mechanical_oid}| / |{path}|
 
 ### 4.3 三类 hunk
 
+**比较方向（唯一）**：以 `git diff --no-renames -U0 <mechanical_tree> <recorded_tree>` 为唯一比较方向
+（该 diff 的 old 侧 = 机械树，new 侧 = 记录树），每个 hunk 按**自身形态**归类：
+
+- 含 `<<<<<<<` / `=======` / `>>>>>>>` → `RESOLUTION`
+- 含 `+` 行（记录了机械树没有的内容）→ `SMUGGLED`
+- 只含 `-` 行（机械树有、记录树没有）→ `DROPPED` 候选，再过"是否被重新引入"
+
+> 这条"单方向 + 按形态"的读法消掉一个歧义：同一处改动在**两个方向**的 diff 里各出现一次，
+> 若按"哪个 diff 命令产生的"分类，同一处改动会同时被报成 SMUGGLED 和 DROPPED。
+> 另注：`RESOLUTION` 是 **hunk 粒度**——一个冲突区可能因 `-U0` 被中间未变的行切成多个 hunk
+> （实测：`drop-one-side` 的冲突区切成 2 个，故 `resolution=2`），`--show-resolution` 输出的是 hunk 列表。
+
 以 hunk 为粒度（`git diff --no-renames -U0` 的 hunk，行号为旧文件/新文件区间）：
 
 | 类别 | 定义 | 默认是否报告 |
@@ -123,8 +135,17 @@ patch_parity(A,B) = |{c in B\A : U0_patchid(c) in U0_patchid(A)}| / |B\A|
 - `B\A` 由 `git rev-list --cherry-pick --right-only A...B` 得到。
 - `U0_patchid(c)` = `git diff-tree -p -U0 <c>^ <c> | git patch-id --stable` 的第一列。
 - 分母为 0 时记为 `null`。
+- **两种 patch 上下文各有用途**：`U0_patchid` 用 `-U0`（判**等价**，对行号与空白免疫）；
+  两个 `apply` 检查用 **`-U3` 默认上下文**（判**是否存在**——`-U0` 补丁没有上下文，
+  `apply` 会过于宽松，把"其实没有"判成"能套用"）。
 - 三态判定优先级：`U0_patchid` 相等 → `PRESENT`；`apply --reverse --check` 成功 → `PRESENT`（内容已存在但来源不同）；`apply --check` 成功 → `MISSING`；两者皆失败 → `MODIFIED`。
-- 临时 worktree 上的判定只用于**兜底**，报告中必须注明 `basis=patchid|apply`。
+- **`apply` 兜底的临时 worktree 挂在 A（源侧）**：问的是"这个改动在 A 里了吗"。
+  挂在 B 侧是错的——候选提交本身就来自 B，反向检查会恒成功、三态退化成恒 PRESENT。
+- `MODIFIED` 之外允许一个**只提示不改判定**的 note：`content_equivalent_at_other_path`
+  （同内容的改动落在另一个路径）。path 参与 patch-id，因此这种候选**仍是 MISSING**，
+  不能因为"别处有同内容"就判 PRESENT。
+- 临时 worktree 上的判定只用于**兜底**，报告中必须注明 `basis=patchid|apply`；
+  `note` 只解释，不改变 `status`。
 
 ### 4.5 finding ID
 

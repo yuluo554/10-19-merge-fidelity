@@ -44,4 +44,7 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+markers = [
+    "slow: 需要真实生成合成仓库的测试（重生成 20 个仓库并与冻结产物逐字节比对）",
+]
 filterwarnings = ["error::DeprecationWarning:mergefidelity.*"]

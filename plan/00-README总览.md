@@ -17,7 +17,8 @@
 | plan/04-数据计划.md | 生成器确定性纪律、19 个 fixture 设计、golden 纪律、bench | ✅ v1 |
 | plan/05-里程碑.md | 每周可演示物、出口门、环境事实、风险预案 | ✅ v1 |
 | plan/06-交付对标.md | 题面 §三/§四逐条落位、待定决策表、发布前检查清单 | ✅ v1 |
-| plan/HANDOFF-M1.md | 下一棒（数据先行）交接快照 | ✅ M0 收尾 |
+| plan/HANDOFF-M1.md | 下一棒（数据先行）交接快照 | ✅ M0 收尾（历史） |
+| plan/HANDOFF-M2.md | 下一棒（`fidelity scan`）交接快照 | ✅ M1 收尾 |
 | data/README.md | 依据查证记录（三态）/ 数据源可获取性 / 合成数据纪律 / 数值口径 | ✅ v1 |
 | .gitignore / .gitattributes / LICENSE / README.md | 工程基座 | ✅ M0 |
 | pyproject.toml / src/ / tests/ / tools/ | 可安装骨架、CLI 契约、fixture 生成器与基准 | ✅ M0 骨架（功能待 M1–M5） |
@@ -56,6 +57,13 @@
 | 2026-10-18 | **octopus 判定不依赖 stderr** | 实测 `remerge-diff` 对 octopus 只在 stderr 打 `Skipping remerge-diff for octopus merges.`、payload 为空。以**父提交数 >2** 为唯一判据，stderr 仅作交叉核对。 |
 | 2026-10-18 | **`-U0` patch-id 对路径敏感**（实测发现） | 同内容不同路径 → 不同 patch-id。`parity` 的 `PRESENT` 因此要区分 `basis=patchid`（路径相同）与 `basis=patchid + note=path_remapped`（路径不同），不把"内容相同"直接当成"已搬过去"。 |
 | 2026-10-18 | **`report` 默认不含 parity** | parity 需要两个显式引用，不能从单仓库默认推导；未给 `--parity-from/--parity-to` 时该节为 `null` 并在 `notes` 写 `parity_not_requested`，不伪造空结果。 |
+| 2026-10-18 | **hunk 分类只用一个方向**（M1 实测定案） | `git diff -U0 <mechanical_tree> <recorded_tree>`，按 hunk 自身形态分：含冲突标记 → RESOLUTION；含 `+` 行 → SMUGGLED；只含 `-` 行 → DROPPED。按"哪个 diff 命令产生的"分类会让同一处改动同时报成 SMUGGLED 和 DROPPED（实测踩到）。原 §4.3 表述两向歧义已修（`data/README.md` §4.3）。 |
+| 2026-10-18 | **"删掉一段内容"归 DROPPED，不归 SMUGGLED**（M1 定案） | 与题面 §一 的语义一致（吞掉 = 手工删掉本应保留的 hunk）。据此把 `smuggle-delete-guard` 改名 `drop-guard-check` 并归入吞掉类，另补 `smuggle-new-file` 保持"夹带 4 / 吞掉 3"的分布。 |
+| 2026-10-18 | **parity 的 apply 兜底挂 A（源侧）**（M1 定案，推翻 plan/03 初稿） | 候选提交来自 B，挂 B 侧做反向检查会恒成功、三态退化成恒 PRESENT。挂 A 才有信息量："这个改动在 A 里了吗"。另定：patch-id 用 `-U0`（等价），apply 检查用 `-U3`（存在性，`-U0` 无上下文会过宽）。 |
+| 2026-10-18 | **`path-remap` 判 MISSING 而非 PRESENT**（M1 实测推翻设想） | 路径参与 patch-id，apply 也按路径匹配；"别处有同内容"不构成 PRESENT。只加 `note=content_equivalent_at_other_path`（只提示不改判定）。 |
+| 2026-10-18 | **fidelity 首期 11 个 fixture（含 1 个反例守护）** | 题面 10 个 + `drop-then-readd`（重引入抑制反例）。生成器在**生成期**把每个 fixture 的声明计数与 oracle 复算对账，不符即失败（植入器自证）。 |
+| 2026-10-18 | **`custom-driver` fixture 推迟到 M2** | 需要一个跨平台可用的 merge driver 命令，与 `SKIPPED(custom_driver)` 判定同步落地更省一轮；已记入 `plan/HANDOFF-M2.md`，不静默漏掉。 |
+| 2026-10-18 | **合成仓库本体不入仓** | 生成到 `data/fixtures/**/repo/` 并由 `.gitignore` 排除；入仓的是生成器 + golden + 每例 README + manifest。理由：嵌套 `.git` 无法逐字节入仓，而"可重建"由 `--check` 位级一致守门保证。 |
 | 2026-10-18 | **M0 骨架采用"可运行空壳"而非假结果** | 五子命令在 M0 即注册并可 `--help`；未实现的模块返回**退出码 2 + 明确中文提示**（"本模块将在 M2 落地"），**不输出伪造空 JSON**。每个模块落地时**同轮退役**该提示。 |
 
 ## 承诺-证据台账
@@ -76,22 +84,22 @@
 | 可复现 digest | 规范 JSON（固定键序/排序，无时间/路径/主机名） | 报告 `digest` + `--verify` | 两台机器不同时区/`core.quotepath` 同 digest | ⬜ 待 M5 |
 | 过期基线门禁 | `audit-baseline.toml` 的 `expires`/`justification` | `gate` 子命令退出码 | 新增/旧账/过期/语法错误四组 | ⬜ 待 M5 |
 | 单进程批量架构 | 性能实测快照（✅ 基准日） | `fidelity` 默认路径 | `bench/fidelity.json` 与逐进程对比 | ⬜ 待 M2 |
-| 合成 fixture 可重建 | `tools/gen_fixtures.py`（固定作者/时间/树） | `data/fixtures/` | 两台机器重建后 `git rev-parse` 一致 | ⬜ 待 M1 |
+| 合成 fixture 可重建 | `tools/gen_fixtures.py`（固定作者/时间/树） | `data/fixtures/` | `--check` 重生成逐字节一致（实测 20/20，2026-10-18） | ✅ M1 |
 | 报告样例与基线样例 | 规范 JSON + TOML | `docs/report-sample.json`、`audit-baseline.toml` | 文件存在 + `--verify` 通过 | ⬜ 待 M5 |
 | README 三场景复现 | 场景命令 | `README.md` | 干净 clone 按 README 跑通 | ⬜ 待 M6 |
 | 测试覆盖 | `tests/` | `pytest` | 三类 hunk/patch-id/三态/revert/verify/退出码 | ⬜ 待 M2–M5 |
 
 ## 里程碑
 
-| 里程碑 | 内容 | DoD |
-|---|---|---|
-| M0 | 出题定稿 + 骨架 | plan/00–06 齐；可安装 CLI（五子命令可 `--help`）；`pytest` 双解释器全绿；退出码契约锁进测试；`LICENSE`/`.gitattributes`/README 基座 |
-| M1 | 数据先行 | `tools/gen_fixtures.py` 可重建 10 个注入缺陷的合成仓库（夹带 4 / 吞掉 3 / 正确冲突解决 2 / octopus 1）+ 各自 `expect.json` golden；两台机器重建后 commit OID 一致 |
-| M2 | fidelity | `fidelity` 子命令可用；10 个 fixture 输出与 golden 逐字节一致；连跑两次一致；octopus 输出 `SKIPPED` 且退出码 0；`bench/fidelity.json` 产出 |
-| M3 | parity | `parity` 子命令可用；双向 release/main 三态矩阵全对；`-U0` 跨行号/空白等价断言通过；临时 worktree 成功与异常路径均无残留 |
-| M4 | ledger | `ledger` 子命令可用；三种 revert 状态识别正确；`REVERT_UNVERIFIED` 与"无 successor"分开输出 |
-| M5 | report / gate | 规范 JSON + `--verify`；两台机器 digest 一致；`gate` 四组退出码语义全对；`audit-baseline.toml` 样例与 CI 示例落地 |
-| M6 | 发布 | **git tag** + **GitHub Release 附产物**（本地留 release zip 副本 + sha256，Release 至少 1 个手工上传附件）+ **发布留档 `plan/RELEASE-M6.md`**（tag 时点事实 / tag 后追加事实分栏）；发布 GitHub 公开仓库；干净环境按 README 跑通三场景 |
+| 里程碑 | 内容 | 出口门 | 状态 |
+|---|---|---|---|
+| M0 | 出题定稿 + 骨架 | plan/00–06 齐；可安装 CLI（五子命令可 `--help`）；`pytest` 双解释器全绿；退出码契约锁进测试；`LICENSE`/`.gitattributes`/README 基座 | ✅ 已完成（2026-10-18） |
+| M1 | 数据先行 | `tools/gen_fixtures.py` 可重建 20 个 fixture（fidelity 11 / parity 6 / ledger 3）+ golden；`--check` 逐字节一致；生成期声明自证；反例在列 | ✅ 已完成（2026-10-18；`custom-driver` fixture 顺延 M2） |
+| M2 | fidelity | `fidelity scan` 可用；11 个 fixture 的 payload 与 golden 逐项一致；同机双跑逐字节一致；octopus 输出 `SKIPPED` 且退出码 0；`custom-driver` fixture + `SKIPPED(custom_driver)`；`bench/fidelity.json` | ⬜ 待开工 |
+| M3 | parity | `parity` 可用；双向三态矩阵全对；`-U0` 跨行号/空白等价（`basis=patchid`）；临时 worktree 成功/异常两路径均无残留 | ⬜ |
+| M4 | ledger | `ledger` 可用；三种 revert 状态识别正确；`REVERT_UNVERIFIED` 与"无 successor"分开输出 | ⬜ |
+| M5 | report / gate | 规范 JSON + `--verify`；两台机器 digest 一致；`gate` 四组退出码语义全对；`audit-baseline.toml` 样例与 CI 示例落地 | ⬜ |
+| M6 | 发布 | 干净环境按 README 跑通三场景；脱敏四步；tag + Release 附件；`plan/RELEASE-M6.md` 两栏留档 | ⬜ |
 
 ## 承诺-证据台账使用说明
 
