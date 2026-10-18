@@ -49,6 +49,7 @@ def test_workflow_steps_are_named_and_counted():
         "pytest",
         "CLI smoke (console script)",
         "CLI smoke (module form)",
+        "CLI smoke (fidelity on generated fixtures)",
     ]
     names = [step.get("name") for step in steps]
     assert names == expected, "step 数量/顺序变化须同步本断言与 README"

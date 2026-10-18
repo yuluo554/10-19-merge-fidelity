@@ -156,11 +156,10 @@ def test_every_registered_subcommand_has_a_dispatch_path():
 
 def test_skeleton_not_ready_registry_is_explicit():
     """骨架态登记：这些模块当前抛 NotReadyError；每落地一个就同轮删一行。"""
-    from mergefidelity import fidelity, gate, ledger, parity, report
+    from mergefidelity import gate, ledger, parity, report
     from mergefidelity.errors import NotReadyError
 
     modules = {
-        "fidelity": fidelity.run,
         "parity": parity.run,
         "ledger": ledger.run,
         "report": report.run,

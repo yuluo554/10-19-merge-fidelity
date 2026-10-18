@@ -65,7 +65,6 @@ def test_fidelity_without_action_returns_usage(capsys):
 
 
 @pytest.mark.parametrize("args,module", [
-    (["fidelity", "scan", "."], "fidelity"),
     (["parity", ".", "--from", "main", "--to", "main"], "parity"),
     (["ledger", "."], "ledger"),
     (["report", "."], "report"),

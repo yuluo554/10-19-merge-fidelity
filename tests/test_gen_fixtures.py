@@ -20,7 +20,7 @@ FIXTURES = os.path.join(ROOT, "data", "fixtures")
 GENERATOR = os.path.join(ROOT, "tools", "gen_fixtures.py")
 
 SUITES = {
-    "fidelity": 11,   # 题面 10 + 反例守护 1（drop-then-readd）
+    "fidelity": 12,   # 题面 10 + 反例守护 1（drop-then-readd）+ custom-driver 1
     "parity": 6,
     "ledger": 3,
 }
@@ -102,14 +102,26 @@ def test_each_fidelity_fixture_matches_its_declared_injection(golden):
 
 
 def test_fidelity_injection_distribution_matches_plan(golden):
+    """题面分布：夹带 4 / 吞掉 3 / 正确解冲突 2 / octopus 1 = 10 个（各注入 1 处）。"""
     required = {
         "smuggle-extra-line", "smuggle-unrelated-file", "smuggle-function-body",
         "smuggle-new-file", "drop-guard-check", "drop-one-side", "drop-partial-hunk",
         "clean-resolution-a", "clean-resolution-b", "octopus",
     }
-    assert required <= set(golden["fidelity"])
-    injected = [n for n, r in golden["fidelity"].items() if r["expect_counts"]]
-    assert len(injected) == 10, "题面要求 10 个各注入 1 个已知缺陷"
+    assert required <= set(golden["fidelity"]), "题面要求的 10 个 fixture 必须都在"
+    defect = [name for name, record in golden["fidelity"].items()
+              if record["expect_counts"]
+              and record["expect_counts"]["smuggled"] + record["expect_counts"]["dropped"] == 1]
+    assert len([n for n in defect if n.startswith("smuggle")]) == 4, defect
+    assert len([n for n in defect if n.startswith("drop")]) == 3, defect
+    assert len(defect) == 7, defect
+
+
+def test_extra_fixtures_are_guards_not_defects(golden):
+    """额外两个 fixture 是守护（反例 / SKIPPED），不冒充"注入缺陷"。"""
+    for name in ("drop-then-readd", "custom-driver"):
+        counts = golden["fidelity"][name]["expect_counts"]
+        assert counts["smuggled"] == 0 and counts["dropped"] == 0, name
 
 
 def test_negative_control_fixtures_report_nothing(golden):

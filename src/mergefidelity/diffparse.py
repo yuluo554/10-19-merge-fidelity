@@ -15,6 +15,7 @@
 
 from collections import namedtuple
 
+LF = chr(10)  # 显式换行：避免源码里嵌真实换行带来的转义歧义
 CONFLICT_MARKERS = ("<<<<<<<", "=======", ">>>>>>>")
 
 Hunk = namedtuple(
@@ -225,3 +226,27 @@ def parse_remerge_log(text):
         body.append(line)
     flush()
     return entries
+
+
+def hunk_patch_text(path, lines, reverse=False):
+    """把一个 hunk 的内容拼成可喂给 `git patch-id` 的最小 diff 文本。
+
+    `git patch-id` 忽略行号与 hunk 头后缀，因此合成的 `@@ -1 +1 @@` 不影响结果；
+    这样"某个被丢掉的 hunk 是否在后续提交里被重新引入"可以用同一个 patch-id 口径比较。
+    ``reverse=True`` 用于把"删除"翻转成"新增"（DROPPED 的重引入判定按新增方向比）。
+    """
+    body = []
+    for line in lines:
+        prefix, rest = line[:1], line[1:]
+        if prefix == "+":
+            prefix = "-" if reverse else "+"
+        elif prefix == "-":
+            prefix = "+" if reverse else "-"
+        body.append(prefix + rest)
+    header = [
+        "diff --git a/%s b/%s" % (path, path),
+        "--- a/%s" % path,
+        "+++ b/%s" % path,
+        "@@ -1 +1 @@",
+    ]
+    return LF.join(header + body) + LF

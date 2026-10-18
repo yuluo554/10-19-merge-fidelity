@@ -183,9 +183,9 @@ def ls_tree(repo, treeish):
     return entries
 
 
-def blob_map(repo, treeish):
-    """``{path: blob_oid}``（blob 与 gitlink/子模块按 type 过滤，只留 blob）。"""
-    out = run_git(repo, ["ls-tree", "-r", "-z", "--full-tree", str(treeish)]).stdout
+def blob_map(repo, treeish, env=None):
+    """``{path: blob_oid}``（非 blob 的条目——如 gitlink——按 type 过滤掉）。"""
+    out = run_git(repo, ["ls-tree", "-r", "-z", "--full-tree", str(treeish)], env=env).stdout
     entries = {}
     for chunk in out.split("\x00"):
         if not chunk:
@@ -252,44 +252,81 @@ class TempObjectDir(object):
         return False
 
 
-def merge_tree(repo, base, p1, p2, *, timeout=120):
-    """机械合并复算 → ``MechanicalTree``。
+class MechanicalMerge(object):
+    """机械合并复算的上下文管理器：**对象环境在上下文内一直存活**。
 
-    干净退出 0；冲突退出 1（首行仍是 tree OID，随后是 stage 1/2/3 条目）。
-    其他退出码抛 ``GitEnvError``。
+    为什么必须是上下文而不是一个函数：`merge-tree --write-tree` 写出的 tree/blob 落在
+    `TempObjectDir` 里，上下文退出即删除；调用方要在同一对象环境里继续
+    `ls-tree` / `diff` 机械树，所以"复算"与"读机械树"必须共享同一个 env。
+
+    属性：``tree_oid`` / ``has_conflict`` / ``entries`` / ``env``（传给其它 git 调用）。
     """
-    with TempObjectDir(repo) as tod:
+
+    def __init__(self, repo, base, p1, p2, *, timeout=120):
+        self.repo = repo
+        self.base = base
+        self.parents = (p1, p2)
+        self.timeout = timeout
+        self._objects = TempObjectDir(repo)
+        self.tree_oid = None
+        self.has_conflict = None
+        self.entries = ()
+        self.env = None
+        self.raw = ""
+
+    def __enter__(self):
+        self._objects.__enter__()
+        self.env = self._objects.env
         result = run_git(
-            repo,
-            ["merge-tree", "--write-tree", "--merge-base=%s" % base, str(p1), str(p2)],
+            self.repo,
+            ["merge-tree", "--write-tree", "--merge-base=%s" % self.base,
+             str(self.parents[0]), str(self.parents[1])],
             check=False,
-            timeout=timeout,
-            env=tod.env,
+            timeout=self.timeout,
+            env=self.env,
         )
-    if result.returncode not in (0, 1):
-        raise GitEnvError("merge-tree 退出 %d：%s" % (result.returncode, result.stderr.strip()))
-
-    lines = result.stdout.split("\n")
-    tree_oid = lines[0].strip() if lines else ""
-    if len(tree_oid) not in (40, 64):
-        raise GitEnvError("merge-tree 首行不是 tree OID：%r" % result.stdout[:200])
-
-    entries = []
-    for line in lines[1:]:
-        if not line.strip() or "\t" not in line:
-            continue
-        meta, _, path = line.partition("\t")
-        parts = meta.split()
-        if len(parts) >= 3 and parts[2].isdigit():
-            entries.append(
-                {"mode": parts[0], "oid": parts[1], "stage": int(parts[2]), "path": path}
+        if result.returncode not in (0, 1):
+            self._objects.__exit__(None, None, None)
+            raise GitEnvError(
+                "merge-tree 退出 %d：%s" % (result.returncode, result.stderr.strip())
             )
-    return MechanicalTree(
-        tree_oid=tree_oid,
-        has_conflict=(result.returncode == 1),
-        entries=tuple(entries),
-        raw=result.stdout,
-    )
+        lines = result.stdout.split("\n")
+        tree_oid = lines[0].strip() if lines else ""
+        if len(tree_oid) not in (40, 64):
+            self._objects.__exit__(None, None, None)
+            raise GitEnvError("merge-tree 首行不是 tree OID：%r" % result.stdout[:200])
+
+        entries = []
+        for line in lines[1:]:
+            if not line.strip() or "\t" not in line:
+                continue
+            meta, _, path = line.partition("\t")
+            parts = meta.split()
+            if len(parts) >= 3 and parts[2].isdigit():
+                entries.append(
+                    {"mode": parts[0], "oid": parts[1], "stage": int(parts[2]), "path": path}
+                )
+        self.tree_oid = tree_oid
+        self.has_conflict = (result.returncode == 1)
+        self.entries = tuple(entries)
+        self.raw = result.stdout
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return self._objects.__exit__(exc_type, exc, tb)
+
+    def as_tuple(self):
+        return MechanicalTree(self.tree_oid, self.has_conflict, self.entries, self.raw)
+
+
+def merge_tree(repo, base, p1, p2, *, timeout=120):
+    """一次性机械合并复算 → ``MechanicalTree``。
+
+    只用于"只要 OID、不需要再读机械树"的场景；需要逐 blob / 逐 hunk 比较时用
+    ``MechanicalMerge`` 上下文（临时对象目录会在本次调用结束时被删掉）。
+    """
+    with MechanicalMerge(repo, base, p1, p2, timeout=timeout) as merge:
+        return merge.as_tuple()
 
 
 def temporary_worktree(repo, rev):
@@ -328,3 +365,69 @@ def worktree_list(repo):
     """返回 worktree 路径列表（用于测试断言零残留）。"""
     out = run_git(repo, ["worktree", "list", "--porcelain"]).stdout
     return [line[len("worktree "):] for line in out.splitlines() if line.startswith("worktree ")]
+
+
+def tree_of(repo, rev):
+    return run_git(repo, ["rev-parse", "%s^{tree}" % rev]).stdout.strip()
+
+
+def merge_base(repo, a, b):
+    return run_git(repo, ["merge-base", str(a), str(b)]).stdout.strip()
+
+
+def commit_time(repo, rev):
+    return int(run_git(repo, ["log", "-1", "--format=%ct", str(rev)]).stdout.strip())
+
+
+def file_at(repo, rev, path):
+    """``<rev>:<path>`` 的内容；不存在返回 ``None``。"""
+    result = run_git(repo, ["show", "%s:%s" % (rev, path)], check=False)
+    if result.returncode != 0:
+        return None
+    return result.stdout
+
+
+def tree_diff(repo, tree_a, tree_b, *, path=None, env=None, context=0):
+    """``git diff --no-renames -U<context> <a> <b> [-- <path>]`` 的文本。"""
+    args = ["diff", "--no-renames", "-U%d" % context, str(tree_a), str(tree_b)]
+    if path:
+        args += ["--", path]
+    return run_git(repo, args, env=env).stdout
+
+
+def patch_id(repo, diff_text):
+    """``git patch-id --stable`` 的第一列；空 diff 返回 ``None``。"""
+    result = run_git(repo, ["patch-id", "--stable"], input_text=diff_text, check=False)
+    if result.returncode != 0 or not result.stdout.strip():
+        return None
+    return result.stdout.split()[0]
+
+
+def commit_diff(repo, rev, *, context=0, path=None):
+    """单个提交的 diff 文本（根提交走 `--root`）。``--`` 必须排在 revisions 之后。"""
+    args = ["diff-tree", "-p", "-U%d" % context, "--no-renames"]
+    if has_parent(repo, rev):
+        args += ["%s^" % rev, str(rev)]
+    else:
+        args += ["--root", str(rev)]
+    if path:
+        args += ["--", path]
+    return run_git(repo, args).stdout
+
+
+def has_parent(repo, rev):
+    out = run_git(repo, ["rev-list", "--parents", "-n", "1", str(rev)]).stdout.split()
+    return len(out) > 1
+
+
+def commits_not_reachable(repo, rev, *, all_refs=True):
+    """``--all`` 中不可从 ``rev`` 到达的提交，按 ``(commit_time, oid)`` 排序。"""
+    reachable = set(rev_list(repo, [str(rev)]))
+    everything = rev_list(repo, ["--all"]) if all_refs else rev_list(repo, ["HEAD"])
+    later = [oid for oid in everything if oid not in reachable]
+    return [oid for _time, oid in sorted((commit_time(repo, oid), oid) for oid in later)]
+
+
+def paths_of_commit(repo, rev):
+    out = run_git(repo, ["diff-tree", "-r", "--no-commit-id", "--name-only", "-z", str(rev)]).stdout
+    return sorted(p for p in out.split(chr(0)) if p)

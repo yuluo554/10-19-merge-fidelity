@@ -23,6 +23,7 @@
 """
 
 import argparse
+import fnmatch
 import hashlib
 import io
 import json
@@ -40,6 +41,7 @@ AUTHOR_EMAIL = "fixture@example.invalid"
 BASE_EPOCH = 1767225600  # 2026-01-01T00:00:00Z
 STEP_SECONDS = 60
 GENERATOR_VERSION = "1"
+REPO_DIR_NAME = "repo"  # 合成仓库在 fixture 目录下的子目录名（不入仓）
 
 GIT_BASE = [
     "-c", "core.autocrlf=false",
@@ -294,10 +296,13 @@ def blob_map(repo, treeish, env=None):
     return entries
 
 
-def blob_fidelity(repo, recorded, mechanical, env=None):
-    """§4.2：分母 = 两侧都存在的 path；单侧存在的单独列出。"""
+def blob_fidelity(repo, recorded, mechanical, env=None, excluded=()):
+    """§4.2：分母 = 两侧都存在的 path；SKIPPED 路径剔除，单侧存在的单独列出。"""
     rec = blob_map(repo, recorded, env=env)
     mec = blob_map(repo, mechanical, env=env)
+    for path in excluded:
+        rec.pop(path, None)
+        mec.pop(path, None)
     both = sorted(set(rec) & set(mec))
     same = [p for p in both if rec[p] == mec[p]]
     value = None if not both else round(float(len(same)) / len(both), 12)
@@ -308,6 +313,53 @@ def blob_fidelity(repo, recorded, mechanical, env=None):
         "path_only_in_recorded": sorted(set(rec) - set(mec)),
         "path_only_in_mechanical": sorted(set(mec) - set(rec)),
     }
+
+
+
+BUILTIN_MERGE_DRIVERS = frozenset(["text", "binary", "union", "ours"])
+
+
+def file_at(repo, rev, path):
+    rc, out, _ = git(repo.path if isinstance(repo, Repo) else repo,
+                     ["show", "%s:%s" % (rev, path)], check=False)
+    return out if rc == 0 else ""
+
+
+def gitattributes_driver_paths(repo, rev, paths):
+    """生成侧**独立实现**的 `.gitattributes` merge-driver 命中判定。
+
+    与生产实现（`mergefidelity.fidelity._custom_driver_paths`）是两份代码，
+    一致性靠 fixture golden 逐项对账，不靠"顺手共用一份"。
+    """
+    text = file_at(repo, rev, ".gitattributes")
+    rules = []
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        fields = line.split()
+        if len(fields) < 2:
+            continue
+        for attr in fields[1:]:
+            if attr.startswith("merge=") and attr[len("merge="):]:
+                if attr[len("merge="):] not in BUILTIN_MERGE_DRIVERS:
+                    rules.append((fields[0], attr[len("merge="):]))
+            elif attr == "-merge":
+                rules.append((fields[0], "-merge"))
+    hit = []
+    for path in sorted(paths):
+        for pattern, _driver in rules:
+            pat = pattern[1:] if pattern.startswith("/") else pattern
+            if pat.endswith("/**"):
+                matched = path.startswith(pat[:-3] + "/")
+            elif "/" not in pat:
+                matched = fnmatch.fnmatchcase(path.split("/")[-1], pat)
+            else:
+                matched = fnmatch.fnmatchcase(path, pat)
+            if matched:
+                hit.append(path)
+                break
+    return hit
 
 
 HUNK_RE = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
@@ -494,7 +546,7 @@ def fidelity_expect(repo, merge_oid):
     meta = commit_meta(repo, merge_oid)
     parents = meta["parents"]
     if len(parents) > 2:
-        return {"skipped": {"merge_oid": merge_oid, "reason": "octopus"}}
+        return {"skipped": [{"merge_oid": merge_oid, "reason": "octopus"}], "merges": []}
     if len(parents) != 2:
         raise GenError("期望 merge 提交，实际父提交为 %r：%s" % (parents, merge_oid))
 
@@ -505,11 +557,20 @@ def fidelity_expect(repo, merge_oid):
 
     with TempObjects(repo) as objects:
         mec_oid, mec_conflict = mechanical_tree(repo, base, p1, p2, objects.env)
-        fidelity = blob_fidelity(repo, rec_oid, mec_oid, env=objects.env)
         hunks = parse_tree_diff(diff_trees(repo, mec_oid, rec_oid, env=objects.env))
+        excluded = gitattributes_driver_paths(repo, merge_oid,
+                                              set(h["path"] for h in hunks))
+        fidelity = blob_fidelity(repo, rec_oid, mec_oid, env=objects.env, excluded=excluded)
+
+    skipped = []
+    if excluded:
+        skipped.append({"merge_oid": merge_oid, "reason": "custom_driver",
+                        "paths": sorted(excluded)})
 
     resolution, smuggled, dropped = [], [], []
     for hunk in hunks:
+        if hunk["path"] in excluded:
+            continue
         if has_conflict_marker(hunk):
             resolution.append(hunk)
             continue
@@ -530,6 +591,7 @@ def fidelity_expect(repo, merge_oid):
         }
 
     return {
+        "skipped": skipped,
         "merges": [{
             "merge_oid": merge_oid,
             "parents": parents,
@@ -926,6 +988,32 @@ def build_fidelity(name, path):
         injects = ["CLEAN_RESOLUTION"]
         declared = {"smuggled": 0, "dropped": 0}
         notes = "把两侧改动语义合并成一行（x + 30）——反例：不得报 SMUGGLED / DROPPED"
+    elif name == "custom-driver":
+        _seed(repo)
+        repo.write(".gitattributes", ["synthapp.dat merge=synthapp"])
+        repo.write("synthapp.dat", ["a", "b", "c"])
+        git(repo.path, ["config", "merge.synthapp.driver", "git merge-file --union %A %O %B"])
+        repo.commit("add synthapp driver", {})
+        repo.checkout("feature/synth-a", create=True)
+        repo.commit("feature a edits both files", {
+            "src/synthapp/core.py": SIDE_CORE,
+            "synthapp.dat": ["a", "side", "c"],
+        })
+        repo.checkout("main")
+        repo.commit("mainline edits both files", {
+            "src/synthapp/core.py": MAIN_CORE,
+            "synthapp.dat": ["a", "main", "c"],
+        })
+        repo.merge("feature/synth-a", expect_fail=True)
+        merge = repo.commit("merge feature/synth-a into main", {
+            "src/synthapp/core.py": set_line(CORE, I_TOTAL, "    total = x + 30"),
+            "src/synthapp/util.py": UTIL,
+            "synthapp.dat": ["a", "union", "c"],
+            ".gitattributes": ["synthapp.dat merge=synthapp"],
+        })
+        injects = ["CUSTOM_DRIVER"]
+        declared = {"smuggled": 0, "dropped": 0, "skipped": "custom_driver"}
+        notes = "`synthapp.dat` 命中自定义 merge driver：该路径必须 SKIPPED(reason=custom_driver) 且不进 blob_fidelity 分母"
     elif name == "octopus":
         _seed(repo)
         # 两个 feature 分支都从 seed 分出（否则 main 前进后 merge 会退化成 fast-forward）
@@ -1112,7 +1200,7 @@ def fidelity_manifest_entry(name, repo, injects, notes, expect):
         "generator_version": GENERATOR_VERSION,
         "refs": refs,
         "merges": merges,
-        "skipped": ([expect["skipped"]] if "skipped" in expect else []),
+        "skipped": list(expect.get("skipped") or []),
         "blob_fidelity_model": ({
             "blob_fidelity": expect["blob_fidelity"]["blob_fidelity"],
             "paths_total": expect["blob_fidelity"]["paths_total"],
@@ -1133,7 +1221,7 @@ FIDELITY_REQUIRED = [
     "clean-resolution-a", "clean-resolution-b",
     "octopus",
 ]
-FIDELITY_EXTRA = ["drop-then-readd"]
+FIDELITY_EXTRA = ["drop-then-readd", "custom-driver"]
 FIDELITY_FIXTURES = FIDELITY_REQUIRED + FIDELITY_EXTRA
 
 
@@ -1146,9 +1234,14 @@ def _validate_declared(name, declared, expect):
         raise GenError("%s：声明了 counts=%r 但 oracle 没算出 counts（merge_oid 传错？）"
                        % (name, declared))
     for key in ("smuggled", "dropped"):
-        if counts[key] != declared[key]:
+        if key in declared and counts[key] != declared[key]:
             raise GenError("%s：声明 %s=%d，oracle 复算为 %d（fixture 构造与意图不符）"
                            % (name, key, declared[key], counts[key]))
+    if declared.get("skipped"):
+        reasons = [item["reason"] for item in expect.get("skipped") or []]
+        if declared["skipped"] not in reasons:
+            raise GenError("%s：声明 skipped=%s，oracle 复算为 %r"
+                           % (name, declared["skipped"], reasons))
 
 PARITY_FIXTURES = [
     "bidirectional-basic", "context-shift", "whitespace",
@@ -1158,7 +1251,7 @@ LEDGER_FIXTURES = ["no-successor", "then-redone", "patchid-mismatch"]
 
 
 def build_one(suite, name, root):
-    repo_dir = os.path.join(root, suite, name, "repo")
+    repo_dir = os.path.join(root, suite, name, REPO_DIR_NAME)
     rmtree(repo_dir)
     os.makedirs(repo_dir, exist_ok=True)
 
@@ -1363,7 +1456,7 @@ def check(root):
                              ("parity", PARITY_FIXTURES),
                              ("ledger", LEDGER_FIXTURES)):
             for name in names:
-                rel_repo = "%s/%s/repo" % (suite, name)
+                rel_repo = "%s/%s/%s" % (suite, name, REPO_DIR_NAME)
                 for label, base in (("frozen", root), ("fresh", tmp)):
                     path = os.path.join(base, rel_repo)
                     if not os.path.isdir(path):

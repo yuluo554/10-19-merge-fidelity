@@ -81,8 +81,12 @@ def finding_id(merge_oid, path, old_range, new_range, kind):
 
 
 def range_str(start, count, side_present=True):
-    """hunk 区间字符串 ``<start>,<count>``（0 基）；无对应侧写 ``-``。"""
-    if not side_present:
+    """hunk 区间字符串 ``<start>,<count>``（0 基）。
+
+    该侧**一行都没有**（``count == 0``，纯插入/纯删除）或该侧根本不存在时，写 ``-``
+    （`data/README.md` §4.5："无对应侧时写 ``-``"）。
+    """
+    if not side_present or int(count) <= 0:
         return "-"
     return "%d,%d" % (int(start), int(count))
 

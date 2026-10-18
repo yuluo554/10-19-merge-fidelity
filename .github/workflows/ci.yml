@@ -39,3 +39,12 @@ jobs:
 
       - name: "CLI smoke (module form)"
         run: python -m mergefidelity --version
+
+      - name: "CLI smoke (fidelity on generated fixtures)"
+        shell: bash
+        run: |
+          set +e
+          mergefidelity fidelity scan data/fixtures/fidelity/smuggle-extra-line/repo --fail-on=smuggled > /dev/null
+          code=$?
+          set -e
+          test "$code" = "1"
