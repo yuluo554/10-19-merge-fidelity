@@ -48,3 +48,14 @@ jobs:
           code=$?
           set -e
           test "$code" = "1"
+
+      - name: "CLI smoke (parity on generated fixtures)"
+        shell: bash
+        run: |
+          set +e
+          mergefidelity parity data/fixtures/parity/bidirectional-basic/repo \
+            --from=release/1.0 --to=main > parity-report.json
+          code=$?
+          set -e
+          test "$code" = "0"
+          python -c "import json;d=json.load(open('parity-report.json'));assert d['candidates']==4 and d['present']==1 and d['missing']==2 and d['modified']==1, d"

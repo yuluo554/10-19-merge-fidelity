@@ -19,14 +19,15 @@
 | plan/06-交付对标.md | 题面 §三/§四逐条落位、待定决策表、发布前检查清单 | ✅ v1 |
 | plan/HANDOFF-M1.md | 下一棒（数据先行）交接快照 | ✅ M0 收尾（历史） |
 | plan/HANDOFF-M2.md | 下一棒（`fidelity scan`）交接快照 | ✅ M1 收尾（历史） |
-| plan/HANDOFF-M3.md | 下一棒（`parity`）交接快照 | ✅ M2 收尾 |
+| plan/HANDOFF-M3.md | 下一棒（`parity`）交接快照 | ✅ M2 收尾（历史） |
+| plan/HANDOFF-M4.md | 下一棒（`ledger`）交接快照 | ✅ M3 收尾 |
 | plan/AUDIT-M0-M2.md | M0–M2 全面审计记录（发现/修复/复验证据/残余缺口） | ✅ 2026-10-18 |
 | data/README.md | 依据查证记录（三态）/ 数据源可获取性 / 合成数据纪律 / 数值口径 | ✅ v1 |
 | .gitignore / .gitattributes / LICENSE / README.md | 工程基座 | ✅ M0 |
-| pyproject.toml / src/ / tests/ / tools/ | 可安装骨架、CLI 契约、fixture 生成器与基准；`fidelity` 已实现，其余四模块仍为骨架态 | 🔶 M0 骨架 + M2 fidelity |
+| pyproject.toml / src/ / tests/ / tools/ | 可安装骨架、CLI 契约、fixture 生成器与基准；`fidelity` 与 `parity` 已实现，其余三模块仍为骨架态 | 🔶 M0 骨架 + M2 fidelity + M3 parity |
 | data/fixtures/{fidelity,parity,ledger}/ | 12 + 6 + 3 个合成仓库的生成脚本 + golden JSON（`--check` 位级一致） | ✅ M1/M2 |
-| data/fixtures/parity/ · ledger/ | 跨分支三态矩阵、revert 三状态 fixture（M3/M4） | ⬜ 待 M3 |
-| bench/fidelity.json | 单进程批量 vs 逐进程基准（M2） | ✅ M2；parity/gate 待 M3/M5 |
+| data/fixtures/ledger/ | revert 三状态 fixture（M4） | ⬜ 待 M4 |
+| bench/fidelity.json · bench/parity.json | 单进程批量 vs 逐进程基准（M2）；parity 端到端与 apply 兜底开销（M3） | ✅ M2/M3；gate 待 M5 |
 | audit-baseline.toml | 基线样例（`expires` + `justification`，M5） | ⬜ 待 M5 |
 | .github/workflows/ci.yml | 门禁接入示例（M5） | ⬜ 待 M5 |
 | plan/RELEASE-M6.md | 发布留档（tag 时点事实 / tag 后追加事实分栏） | ⬜ 待 M6 |
@@ -57,7 +58,7 @@
 | 2026-10-18 | **Release 附件 = 手工源码包**（用户拍板） | `git archive <tag>` + `gzip -9n` + `SHA256SUMS`；两次构建逐字节一致，sha256 只写 Release 正文，不写进包内。 |
 | 2026-10-18 | **`merge-tree` 必须隔离对象目录**（实测发现） | `merge-tree --write-tree` 会向对象库写 tree/blob（实测 `.git/objects` 文件数增加）。为兑现"只读 `.git`"，调用时设 `GIT_OBJECT_DIRECTORY=<tmp>` + `GIT_ALTERNATE_OBJECT_DIRECTORIES=<repo>/.git/objects`，用完删临时目录；测试断言前后对象数不变。 |
 | 2026-10-18 | **octopus 判定不依赖 stderr** | 实测 `remerge-diff` 对 octopus 只在 stderr 打 `Skipping remerge-diff for octopus merges.`、payload 为空。以**父提交数 >2** 为唯一判据，stderr 仅作交叉核对。 |
-| 2026-10-18 | **`-U0` patch-id 对路径敏感**（实测发现） | 同内容不同路径 → 不同 patch-id。`parity` 的 `PRESENT` 因此要区分 `basis=patchid`（路径相同）与 `basis=patchid + note=path_remapped`（路径不同），不把"内容相同"直接当成"已搬过去"。 |
+| 2026-10-18 | **`-U0` patch-id 对路径敏感**（实测发现） | 同内容不同路径 → 不同 patch-id。`parity` 的 `PRESENT` 因此只认"路径也相同"的 patch-id 命中（`basis=patchid`）；"别处有同内容"只落 `note`，**不改判定**（见下一行）。 |
 | 2026-10-18 | **`report` 默认不含 parity** | parity 需要两个显式引用，不能从单仓库默认推导；未给 `--parity-from/--parity-to` 时该节为 `null` 并在 `notes` 写 `parity_not_requested`，不伪造空结果。 |
 | 2026-10-18 | **hunk 分类只用一个方向**（M1 实测定案） | `git diff -U0 <mechanical_tree> <recorded_tree>`，按 hunk 自身形态分：含冲突标记 → RESOLUTION；含 `+` 行 → SMUGGLED；只含 `-` 行 → DROPPED。按"哪个 diff 命令产生的"分类会让同一处改动同时报成 SMUGGLED 和 DROPPED（实测踩到）。原 §4.3 表述两向歧义已修（`data/README.md` §4.3）。 |
 | 2026-10-18 | **"删掉一段内容"归 DROPPED，不归 SMUGGLED**（M1 定案） | 与题面 §一 的语义一致（吞掉 = 手工删掉本应保留的 hunk）。据此把 `smuggle-delete-guard` 改名 `drop-guard-check` 并归入吞掉类，另补 `smuggle-new-file` 保持"夹带 4 / 吞掉 3"的分布。 |
@@ -73,6 +74,9 @@
 | 2026-10-18 | **bench 的"单进程 vs 逐进程"要在多 merge 仓库上量** | fixture 每仓只有 1 个 merge，斜率看不出来；bench 另造 8-merge 合成仓库（实测：批量 0.061s vs 逐 merge 0.463s ≈7.6×），外部真实仓库用可选的 `--repo` 传入，样本量如实标注。 |
 | 2026-10-18 | **合成仓库本体不入仓** | 生成到 `data/fixtures/**/repo/` 并由 `.gitignore` 排除；入仓的是生成器 + golden + 每例 README + manifest。理由：嵌套 `.git` 无法逐字节入仓，而"可重建"由 `--check` 位级一致守门保证。 |
 | 2026-10-18 | **M0 骨架采用"可运行空壳"而非假结果** | 五子命令在 M0 即注册并可 `--help`；未实现的模块返回**退出码 2 + 明确中文提示**（"本模块将在 M2 落地"），**不输出伪造空 JSON**。每个模块落地时**同轮退役**该提示。 |
+| 2026-10-18 | **M3 起实现 `parity`：候选顺序取 `git rev-list` 原序**（`plan/03` §2.2 笔误已更正） | golden（M1 oracle）与 `git rev-list --cherry-pick --right-only` 的输出顺序逐条一致；原 §2.2 写的"按 `(commit_time, oid)` 排序"与 golden 冲突。定案：**以 rev-list 原序为准**（它就是候选集的产生者，且已冻结进 golden），`rev-list` 侧排序不引入额外口径；`--cherry-pick` 的候选条数与 `git cherry -v` 交叉核对（不一致只记 `warnings`，不失败）。 |
+| 2026-10-18 | **`parity` 的 `note` 与 `status` 解耦**（M3 定案，细化 K27） | `equivalent_source` 分两种：判 `PRESENT` 时指向 A 侧同 `-U0` patch-id 的提交；`note=content_equivalent_at_other_path` 时指向 A 侧含同内容行的提交（**只提示**，`status` 仍由定义式给出，path-remap 场景仍是 `MISSING`）。 |
+| 2026-10-18 | **`parity --no-apply-fallback` 下 patch-id 不等 → `MODIFIED(basis=patchid)`** | 没有 apply 证据就**不声称**"缺失"；MISSING 的判据是 `apply --check` 成功，缺证时不能靠 patch-id 差异反推。`basis` 仍是必填字段（值域 `patchid`/`apply`）。 |
 
 ## 承诺-证据台账
 
@@ -85,26 +89,27 @@
 | 夹带检出（SMUGGLED） | 树 diff 单方向 + 按 hunk 形态（✅ M1 定稿） | `fidelity scan --show-kind=smuggled` | 4 个夹带 fixture 的 golden hunk（实测一致） | ✅ M2 |
 | 静默吞掉检出（DROPPED） | 机械树有、记录树无、且未被后续重引入（✅ 本地复算） | `fidelity scan --show-kind=dropped` | 3 个吞掉 fixture 的 golden hunk（实测一致） | ✅ M2 |
 | octopus 显式 SKIPPED | 父提交数 >2（不解析 stderr，✅ M1 定稿） | 报告 `skipped[*]` | octopus fixture 断言 `reason=octopus` 且退出码 0（实测） | ✅ M2 |
-| 跨分支补丁对齐（PRESENT/MISSING/MODIFIED） | `--cherry-pick --right-only` + `-U0` patch-id + `apply --check`（✅ 本地复算） | `parity` 子命令 | 双向 release/main 三态矩阵 fixture | ⬜ 待 M3 |
-| 空白免疫与跨行号等价 | `-U0` + `patch-id --stable`（✅ 本地复算） | `parity` 的 `u0_patchid` | 第 2 行 vs 第 5 行、四种空白形态同 id 断言 | ⬜ 待 M3 |
+| 跨分支补丁对齐（PRESENT/MISSING/MODIFIED） | `--cherry-pick --right-only` + `-U0` patch-id + `apply --check`（✅ 本地复算） | `parity` 子命令 | 6 个 fixture 的双向结果与 `expect.json` 逐项一致（实测，2026-10-18） | ✅ M3 |
+| 空白免疫与跨行号等价 | `-U0` + `patch-id --stable`（✅ 本地复算） | `parity` 的 `u0_patchid` | `context-shift`（第 2 行 vs 第 5 行）与 `whitespace`（`value=1` vs `value =    1`）均 `PRESENT(basis=patchid)`（实测） | ✅ M3 |
+| 临时 worktree 零残留 | `git worktree add --detach` + 三连清理（✅ 本地复算） | `parity` 的 apply 兜底 | 成功与异常两条路径后 `git worktree list` 只剩主工作树（实测，2026-10-18） | ✅ M3 |
 | revert 账本（REVERTED_NO_SUCCESSOR / THEN_REDONE / UNVERIFIED） | `--grep='^This reverts commit'` + patch-id 反向校验 + `--find-object`（✅ 本地复算） | `ledger` 子命令 | 三种状态 fixture | ⬜ 待 M4 |
 | 内容寻址 finding ID | `sha1(merge_oid‖path‖old_range‖new_range‖kind)`（✅ 口径已定） | 报告 `findings[*].id` | 独立实现重算 sha1 + 改一字节 `--verify` 非 0 | ⬜ 待 M5 |
 | 可复现 digest | 规范 JSON（固定键序/排序，无时间/路径/主机名） | 报告 `digest` + `--verify` | 两台机器不同时区/`core.quotepath` 同 digest | ⬜ 待 M5 |
 | 过期基线门禁 | `audit-baseline.toml` 的 `expires`/`justification` | `gate` 子命令退出码 | 新增/旧账/过期/语法错误四组 | ⬜ 待 M5 |
 | 单进程批量架构 | 性能实测快照（✅ 基准日） | `fidelity` 默认路径 | `bench/fidelity.json`：8-merge 仓批量 0.061s vs 逐 merge 0.463s（实测 2026-10-18） | ✅ M2 |
-| 合成 fixture 可重建 | `tools/gen_fixtures.py`（固定作者/时间/树） | `data/fixtures/` | `--check` 重生成逐字节一致（实测 20/20，2026-10-18） | ✅ M1 |
+| 合成 fixture 可重建 | `tools/gen_fixtures.py`（固定作者/时间/树） | `data/fixtures/` | `--check` 重生成逐字节一致（实测 21/21，2026-10-18） | ✅ M1 |
 | 报告样例与基线样例 | 规范 JSON + TOML | `docs/report-sample.json`、`audit-baseline.toml` | 文件存在 + `--verify` 通过 | ⬜ 待 M5 |
 | README 三场景复现 | 场景命令 | `README.md` | 干净 clone 按 README 跑通 | ⬜ 待 M6 |
-| 测试覆盖 | `tests/` | `pytest`（含 `slow` 标记的生成器确定性层） | 三类 hunk ✅ M2；patch-id/三态 ⬜ M3；revert ⬜ M4；`--verify`/退出码 ⬜ M5 | 🔶 进行中 |
+| 测试覆盖 | `tests/` | `pytest`（含 `slow` 标记的生成器确定性层） | 三类 hunk ✅ M2；patch-id/三态/worktree ✅ M3；revert ⬜ M4；`--verify`/退出码 ⬜ M5 | 🔶 进行中 |
 
 ## 里程碑
 
 | 里程碑 | 内容 | 出口门 | 状态 |
 |---|---|---|---|
 | M0 | 出题定稿 + 骨架 | plan/00–06 齐；可安装 CLI（五子命令可 `--help`）；`pytest` 双解释器全绿；退出码契约锁进测试；`LICENSE`/`.gitattributes`/README 基座 | ✅ 已完成（2026-10-18） |
-| M1 | 数据先行 | `tools/gen_fixtures.py` 可重建 20 个 fixture（fidelity 11 / parity 6 / ledger 3）+ golden；`--check` 逐字节一致；生成期声明自证；反例在列 | ✅ 已完成（2026-10-18；`custom-driver` fixture 顺延 M2） |
+| M1 | 数据先行 | `tools/gen_fixtures.py` 可重建 21 个 fixture（fidelity 12 / parity 6 / ledger 3）+ golden；`--check` 逐字节一致；生成期声明自证；反例在列 | ✅ 已完成（2026-10-18；`custom-driver` fixture 顺延 M2） |
 | M2 | fidelity | `fidelity scan` 可用；**12 个 fixture 的 payload 与 golden 逐项一致**；同机双跑逐字节一致；octopus 与 custom_driver 均 `SKIPPED` 且退出码 0；`bench/fidelity.json` | ✅ 已完成（2026-10-18） |
-| M3 | parity | `parity` 可用；双向三态矩阵全对；`-U0` 跨行号/空白等价（`basis=patchid`）；临时 worktree 成功/异常两路径均无残留 | ⬜ |
+| M3 | parity | `parity` 可用；**6 个 fixture 的双向结果与 golden 逐项一致**；三态齐全且 `basis` 必填；`-U0` 跨行号/空白等价（`basis=patchid`）；临时 worktree 成功/异常两路径均无残留；`bench/parity.json` | ✅ 已完成（2026-10-18） |
 | M4 | ledger | `ledger` 可用；三种 revert 状态识别正确；`REVERT_UNVERIFIED` 与"无 successor"分开输出 | ⬜ |
 | M5 | report / gate | 规范 JSON + `--verify`；两台机器 digest 一致；`gate` 四组退出码语义全对；`audit-baseline.toml` 样例与 CI 示例落地 | ⬜ |
 | M6 | 发布 | 干净环境按 README 跑通三场景；脱敏四步；tag + Release 附件；`plan/RELEASE-M6.md` 两栏留档 | ⬜ |

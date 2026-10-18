@@ -22,12 +22,12 @@
 | M0 | 计划文档（`plan/00`–`06`）+ 可安装骨架 + CLI 契约 | ✅ 已完成 |
 | M1 | 数据先行：`tools/gen_fixtures.py` + 21 个合成 fixture 与 golden（`--check` 位级一致） | ✅ 已完成 |
 | M2 | `fidelity scan`：机械树复算 + `blob_fidelity` + 三类 hunk（12/12 fixture 与 golden 逐项一致） | ✅ 已完成 |
-| M3 | `parity`：跨分支三态（`-U0` patch-id + apply 兜底） | ⬜ 未开工 |
+| M3 | `parity`：跨分支三态（`-U0` patch-id + apply 兜底）；6 个 fixture 双向与 golden 逐项一致 | ✅ 已完成 |
 | M4 | `ledger`：revert / 复活账本 | ⬜ 未开工 |
 | M5 | `report`（digest + `--verify`）/ `gate`（过期基线门禁） | ⬜ 未开工 |
 | M6 | 发布：公开仓库 + v0.1.0 tag + Release 附件 | ⬜ 未开工 |
 
-> `fidelity` 已可用；`parity` / `ledger` / `report` / `gate` **已注册并可 `--help`**，但尚未实现的
+> `fidelity` 与 `parity` 已可用；`ledger` / `report` / `gate` **已注册并可 `--help`**，但尚未实现的
 > 模块以**退出码 2 + 中文提示**收场，**不输出伪造的空结果**（每个模块落地时同轮退役该提示）。
 >
 > 开发进度与逐项证据见 `plan/00-README总览.md`（承诺-证据台账 + 里程碑表）与各 `plan/HANDOFF-*.md`。
@@ -44,7 +44,7 @@ Windows 上 `python` 可能是应用商店占位符，用 `py -3.8` / `py -3.12`
 
 ## 用法（最小复现命令）
 
-> `fidelity` 已按下列形态可用；`parity` / `gate` 的参数契约自 M0 起固定，功能里程碑落地后即可用。
+> `fidelity` 与 `parity` 已按下列形态可用；`gate` 的参数契约自 M0 起固定，功能里程碑落地后即可用。
 
 ```bash
 # 场景一：扫描一个仓库的全部 merge，看有哪些夹带/吞掉
@@ -53,6 +53,7 @@ mergefidelity fidelity scan /path/to/repo --since=v0.1.0 --fail-on=smuggled   # 
 
 # 场景二：release 分支上的修复有没有回流到 main
 mergefidelity parity /path/to/repo --from=release/1.0 --to=main
+mergefidelity parity /path/to/repo --from=release/1.0 --to=main --no-apply-fallback   # 不建临时 worktree
 
 # 场景三：CI 门禁——只扫增量，基线内旧账不失败，过期旧账重新报警
 mergefidelity gate /path/to/repo --since=v0.1.0 --baseline=audit-baseline.toml --fail-on=smuggled
@@ -83,6 +84,20 @@ mergefidelity gate /path/to/repo --since=v0.1.0 --baseline=audit-baseline.toml -
 | `findings[*].id` | `sha1(merge_oid ‖ path ‖ old_range ‖ new_range ‖ kind)` |
 | `digest` | 去掉该字段自身后的规范 JSON sha256，可 `--verify` 重算 |
 
+`parity` 报告（`--from=A --to=B`）另含：
+
+| 字段 | 说明 |
+|---|---|
+| `from_oid` / `to_oid` | 两侧引用的 commit OID（`A^{commit}` / `B^{commit}`） |
+| `candidates` | `git rev-list --cherry-pick --right-only A...B`；报告按该顺序逐条列出 |
+| `patch_parity` | `present / candidates`；候选为 0 时记 `null`（不记 1.0） |
+| `commits[*].status` | `PRESENT` / `MISSING` / `MODIFIED` |
+| `commits[*].basis` | `patchid`（`-U0` patch-id 相等）或 `apply`（临时 worktree 上的 `apply --check`）——**必填** |
+| `commits[*].note` | 只提示不改判定：`content_already_present` / `partial_or_context_conflict` / `content_equivalent_at_other_path` |
+| `commits[*].equivalent_source` | 判 `PRESENT` 时指向 A 侧同 patch-id 的提交；`note` 为跨路径提示时指向 A 侧同内容提交 |
+| `worktree` | `{"created":bool,"reason":"apply_fallback"}`——临时 worktree 是否启用（报告落绝对路径**禁止**） |
+| `warnings[*]` | `CHERRY_COUNT_MISMATCH`：`rev-list` 与 `git cherry` 候选数不一致（只提示，不失败） |
+
 ## 已知边界（如实标注）
 
 - **octopus merge（父提交 >2）与自定义 merge driver 命中的路径**统一输出 `SKIPPED(reason=...)`：
@@ -100,7 +115,14 @@ mergefidelity gate /path/to/repo --since=v0.1.0 --baseline=audit-baseline.toml -
 - **规模**：>10 万提交的仓库无样本，首期不承诺上限。
 - **结论语义**：`blob_fidelity` 与 finding 是"机械合并 vs 实际记录"的**差异证据**，
   **不等于"这段代码错了"**；报告同时给出两侧树的可复算入口，由人判断业务影响。
-- 临时 worktree 只用于 `parity` 的 apply 兜底，落在系统临时目录，成功/异常两条路径都清理。
+- **`parity` 的两种 patch 上下文各有用途**：`-U0` patch-id 判**等价**（对行号与空白免疫），
+  `apply --check` 用 `-U3` 判**是否存在**（`-U0` 补丁没有上下文，apply 会过于宽松）。
+  `--no-apply-fallback` 下不创建任何 worktree，patch-id 不等一律记 `MODIFIED(basis=patchid)`
+  ——没有 apply 证据就**不声称**"缺失"。
+- **`parity` 的判定 worktree 挂在源侧 A**：问的是"这个改动在 A 里了吗"；挂 B 侧会因候选本就
+  来自 B 而恒成功、三态退化成恒 `PRESENT`。
+- 临时 worktree 只用于 `parity` 的 apply 兜底，落在系统临时目录，每次调用只创建一次，
+  成功/异常两条路径都清理。
 
 ## 开发
 

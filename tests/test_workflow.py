@@ -50,6 +50,7 @@ def test_workflow_steps_are_named_and_counted():
         "CLI smoke (console script)",
         "CLI smoke (module form)",
         "CLI smoke (fidelity on generated fixtures)",
+        "CLI smoke (parity on generated fixtures)",
     ]
     names = [step.get("name") for step in steps]
     assert names == expected, "step 数量/顺序变化须同步本断言与 README"
@@ -62,6 +63,7 @@ def test_workflow_uses_readme_install_path_and_bare_console_script():
     assert 'pip install -e ".[dev]"' in joined, "CI 必须走 README 的安装通路"
     assert "mergefidelity --version" in joined, "必须冒烟裸 console script（不是只有 python -m）"
     assert "python -m mergefidelity --version" in joined, "module 形态也要冒烟"
+    assert "mergefidelity parity " in joined, "parity 冒烟（三态矩阵）必须存在"
 
 
 def test_workflow_sets_utf8_env():

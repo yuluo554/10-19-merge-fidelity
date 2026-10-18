@@ -336,8 +336,8 @@ def render_markdown(report):
     lines = [
         "# Merge 保真度扫描",
         "",
-        "- 工具版本：%s（git %s / %s）" % (report["tool_version"], report["git_version"],
-                                          report["object_format"]),
+        "- 工具版本：%s（%s / %s）" % (report["tool_version"], report["git_version"],
+                                      report["object_format"]),
         "- 范围：%s · as_of：%s" % (report["range"], report["as_of"]),
         "- 扫描 merge：%d（跳过 %d）" % (report["summary"]["merges_scanned"],
                                         report["summary"]["skipped"]),
