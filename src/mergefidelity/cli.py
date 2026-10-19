@@ -71,8 +71,11 @@ def build_parser():
     scan.add_argument("--until", metavar="REV", default=None, help="只扫 ..REV 之前的提交")
     scan.add_argument("--all", action="store_true", help="全量扫描（默认）")
     scan.add_argument("--range", metavar="A..B", default=None, help="显式提交范围")
-    scan.add_argument("--show-kind", choices=("smuggled", "dropped", "resolution", "all"),
-                      default="smuggled,dropped", help="输出哪些 hunk 类别")
+    # 注意：**不设 `choices=`**。`plan/03` §1.1 与 README 场景一的口径是逗号列表
+    # （`--show-kind=smuggled,dropped`），argparse 的 `choices=` 会把整串当一个值从而拒绝它；
+    # 逗号拆分与非法值报错由 `fidelity._kinds_from_args` 负责（抛 `UsageError` → 退出码 2）。
+    scan.add_argument("--show-kind", metavar="KINDS", default="smuggled,dropped",
+                      help="输出哪些 hunk 类别：smuggled/dropped/resolution/all，可用逗号组合")
     scan.add_argument("--show-resolution", action="store_true",
                       help="同时输出 RESOLUTION 类 hunk（默认不报）")
     scan.add_argument("--fail-on", choices=("smuggled", "dropped", "any"), default=None,

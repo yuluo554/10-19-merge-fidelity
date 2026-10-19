@@ -281,7 +281,25 @@ def test_cli_writes_file_and_markdown(tmp_path, capsys):
     assert "SMUGGLED" in md.read_text(encoding="utf-8")
 
 
-def test_cli_rejects_unknown_kind():
-    with pytest.raises(SystemExit) as excinfo:
-        cli.build_parser().parse_args(["fidelity", "scan", ".", "--show-kind=weird"])
-    assert excinfo.value.code == 2
+def test_cli_rejects_unknown_kind(capsys):
+    """非法 `--show-kind` 值 → 退出码 2。
+
+    **M6 干净环境实测抓出的真缺陷**：`--show-kind` 原先带 `choices=(...)`，
+    argparse 会把 `--show-kind=smuggled,dropped`（`plan/03` §1.1 与 README 场景一的
+    口径）整串当一个值而拒绝它 → README 里那条最小复现命令直接退出码 2。
+    修法：去掉 `choices=`，逗号拆分与非法值报错交给 `fidelity._kinds_from_args`
+    （抛 `UsageError`，由 `cli.main` 统一映射成退出码 2）。本测试因此从
+    "argparse SystemExit" 改成断言 `cli.main` 的返回值。
+    """
+    code = cli.main(["fidelity", "scan", ".", "--show-kind=weird"])
+    assert code == 2
+    assert "--show-kind 只接受" in capsys.readouterr().err
+
+
+def test_cli_accepts_documented_comma_kinds(capsys):
+    """README 场景一与 `plan/03` §1.1 的逗号列表形态必须被接受（回归靶子）。"""
+    repo = _repo("drop-one-side")
+    code = cli.main(["fidelity", "scan", repo, "--show-kind=smuggled,dropped"])
+    assert code == 0
+    assert cli.main(["fidelity", "scan", repo, "--show-kind=all"]) == 0
+    assert cli.main(["fidelity", "scan", repo, "--show-kind=dropped,resolution"]) == 0
