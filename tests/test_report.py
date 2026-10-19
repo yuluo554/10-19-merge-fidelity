@@ -25,6 +25,9 @@ FIDELITY_ROOT = os.path.join(ROOT, "data", "fixtures", "fidelity")
 LEDGER_ROOT = os.path.join(ROOT, "data", "fixtures", "ledger")
 GENERATOR = os.path.join(ROOT, "tools", "gen_fixtures.py")
 
+sys.path.insert(0, os.path.join(ROOT, "tests"))
+import synthrepo  # noqa: E402  (同目录测试助手)
+
 SMUGGLE_REPO = os.path.join(FIDELITY_ROOT, "smuggle-extra-line", "repo")
 LEDGER_REPO = os.path.join(LEDGER_ROOT, "then-redone", "repo")
 
@@ -102,6 +105,34 @@ def test_report_has_no_forbidden_header_fields():
                 "config_overrides", "range", "as_of", "findings_digest_algorithm"):
         assert key in payload, key
     assert payload["findings_digest_algorithm"] == "sha256"
+
+
+def test_as_of_falls_back_to_head_on_empty_input(tmp_path):
+    """空输入（无 merge、无 revert）时 `as_of` 必须回落到 HEAD 的提交时间。
+
+    回归靶子（M5 实测抓出）：初版用 `max([] or [0])` → 空输入落成 **1970-01-01**，
+    与同一仓库的 `fidelity` / `ledger` 给出不同 `as_of`（它们都回落 HEAD）。
+    变异验证：把回落去掉（`stamp = max(values) if values else 0`）→ 本测试变红。
+    """
+    repo = str(tmp_path / "repo")
+    synthrepo.init_repo(repo)
+    synthrepo.commit(repo, "only linear commit", {"src/synthapp/core.py": ["a", "b"]})
+
+    fidelity_report = fidelity.scan(repo)
+    ledger_report = ledger.ledger_scan(repo)
+    payload = report.build_report(repo)
+    assert fidelity_report["merges"] == [] and ledger_report["entries"] == []
+    assert payload["as_of"] == fidelity_report["as_of"] == ledger_report["as_of"]
+    assert payload["as_of"] != "1970-01-01"
+
+
+def test_as_of_agrees_with_every_input_module(tmp_path):
+    """`report` 的 `as_of` 必须等于三源 `as_of` 的最大值（口径一致，不另算一份时间戳）。"""
+    payload = report.build_report(SMUGGLE_REPO, parity_from="feature/synth-a",
+                                  parity_to="main")
+    sources = [payload["fidelity"]["as_of"], payload["ledger"]["as_of"],
+               payload["parity"]["as_of"]]
+    assert payload["as_of"] == max(sources)
 
 
 def test_as_of_comes_from_commit_times_not_the_clock():

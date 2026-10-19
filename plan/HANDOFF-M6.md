@@ -13,6 +13,7 @@
 | digest 跨时区一致 | ✅ | `TZ=America/New_York` vs `TZ=Asia/Shanghai` 下同 digest（实测 `1ff58a3c7f4cd8146886f6a8112c1f43e3ff118b5208f7286743a671df695ab2`） |
 | digest 对 `core.quotepath` 免疫 | ✅ | 报告头字段在 `core.quotepath=true/false` 下不变（路径经 `-z` 原样读出）；变异验证：去掉 `-z` → 测试变红 |
 | 报告头禁止字段 | ✅ | 断言无绝对路径 / `python_version` / `scan_time` / `hostname` / `locale`；`as_of` 取自提交时间（`2026-01-01`） |
+| **`as_of` 回落口径（实测抓出的回归）** | ✅ | 初版空输入（无 merge、无 revert）落成 `1970-01-01`，与同一仓库的 `fidelity`/`ledger` 不一致。定案：取**三源 `as_of` 的最大值**，空仓库无提交才回落 `end_rev`。复现 `test_report.py::test_as_of_falls_back_to_head_on_empty_input`；变异验证：去掉回落 → 该测试变红 |
 | `--verify` 篡改定位 | ✅ | 改一字节 → 退出码 1，`json_path` = `findings[0].kind`；嵌套 → `fidelity.merges[0].hunks[0].new_range`；只改 `digest` → 定位到 `digest` |
 | **定位顺序（实测抓出的设计点）** | ✅ | 必须"先内容、后 digest"：先查 digest 会把"哪一处被改了"的答案盖成 `digest`。变异验证：把 digest 检查挪到前面 → 两条篡改测试变红 |
 | `parity` 不伪造空结果 | ✅ | 未给两个引用 → 该节 `null` + `notes=[parity_not_requested]`；只给一个 → 用法错误 2 |
@@ -27,7 +28,7 @@
 | 共享层口径收敛 | ✅ | `fidelity.range_end`（取代 `ledger._range_end`）、`fidelity.validate_as_of`（取代 `ledger`/`parity` 的 `_validate_as_of`） |
 | CI 接线 | ✅ | 新增 2 step：`CLI smoke (report digest + --verify on generated fixtures)`、`CLI smoke (gate four exit-code semantics)`；workflow 本地 `yaml.safe_load` 通过（**11 step**） |
 | 基准 | ✅ | `bench/gate.json`：12 个 fixture 的完整门禁路径耗时 + 基线命中数/四类计数 |
-| 测试规模 | ✅ | 快层 **255 passed** ×（3.8 / 3.12）；慢层（`--check` 重生成 21 个仓库）1 passed |
+| 测试规模 | ✅ | 快层 **257 passed** ×（3.8 / 3.12）；慢层（`--check` 重生成 21 个仓库）1 passed |
 
 **本地等价校验（未接远端，CI 待首推验证）**：双解释器快层、3.8 慢层、workflow 本地解析、report `--verify` 与 gate 四组退出码 CLI 冒烟、样例产物复算。
 **不可本机实跑**：Linux/macOS 上 `git log --find-object` / `worktree` / `merge-tree` 行为差异（首份跨平台证据仍由 CI 首推给出）。
@@ -58,7 +59,7 @@ py -3.8 -m venv .venv && .venv/Scripts/pip install -e ".[dev]"
 mergefidelity --version          # → mergefidelity 0.1.0
 mergefidelity --help             # → 五子命令
 py -3.8 tools/gen_fixtures.py --out data/fixtures --check   # → 21/21 逐字节一致
-py -3.8 -m pytest -q             # → 255 passed + 1 slow
+py -3.8 -m pytest -q             # → 257 passed + 1 slow
 ```
 
 再按 README 的三个场景逐条跑通（`fidelity scan` / `parity --from --to` / `gate --baseline`），
@@ -104,6 +105,7 @@ tag `v0.1.0` / Release 标题。**当前是 `0.1.0.dev0`，发布前统一改成
 | K51 | **`gate` 的 `expires` 边界含当天**：`as_of <= expires` 算未过期；比较基准是报告内 `as_of`（不读系统时钟） | `gate.classify`、`test_gate.py::test_expires_boundary_is_inclusive_on_as_of`、`data/README.md` §4.7 |
 | K52 | **骨架态退役完成：`errors.NotReadyError` 删除**：五子命令全部落地，无模块再抛占位异常。守门测试改成**空集**（断言异常类不存在 + 无模块含 `NotReadyError`/`NotImplementedError`/`TODO`） | `errors.py`、`report.py`、`gate.py`、`test_readme_gate.py`、`test_cli.py` |
 | K53 | **报告头指纹与 `--as-of` 校验全项目只留一处**：`fidelity.range_end`（范围右端）与 `fidelity.validate_as_of`；`ledger._range_end` 与 `ledger`/`parity` 的 `_validate_as_of` 已删 | `fidelity.range_end`、`fidelity.validate_as_of`、`plan/03` §8 |
+| K54 | **`report` 的 `as_of` 取三源 `as_of` 的最大值**（不另算时间戳）：三源各自都已把"输入内最新提交时间"算成日期，且空输入都回落 `end_rev`；这样同一仓库三个模块给出同一 `as_of`。空仓库无提交才回落 `end_rev`。初版 `max([] or [0])` → `1970-01-01` 是实测抓出的回归 | `report._default_as_of`、`report.build_report`、`test_report.py::test_as_of_falls_back_to_head_on_empty_input` / `test_as_of_agrees_with_every_input_module` |
 
 ## 4. 本机环境坑（2026-10-19 实测；引用前先复测）
 
@@ -140,7 +142,7 @@ tag `v0.1.0` / Release 标题。**当前是 `0.1.0.dev0`，发布前统一改成
 - [x] `tools/bench_gate.py` → `bench/gate.json`（完整门禁路径耗时 + 基线命中数）
 - [x] 骨架态退役三处同步（代码 + 登记测试 + CLI 参数）；`errors.NotReadyError` 已删
 - [x] CI 新增 report/gate 冒烟（含 `--verify` 与 gate 四组退出码），workflow 本地解析通过（11 step）
-- [x] 双解释器快层 255 passed；3.8 慢层 1 passed
+- [x] 双解释器快层 257 passed；3.8 慢层 1 passed
 - [ ] **CI 绿** —— 未接远端，**写"本地等价校验（待首推验证）"**，M6 首推后据实补记 run id
 
 ## 6. 关键命令速查

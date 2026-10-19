@@ -116,7 +116,7 @@
 | 合成 fixture 可重建 | `tools/gen_fixtures.py`（固定作者/时间/树） | `data/fixtures/` | `--check` 重生成逐字节一致（实测 21/21，2026-10-18） | ✅ M1 |
 | 报告样例与基线样例 | 规范 JSON + TOML | `docs/report-sample.json`、`audit-baseline.toml` | 文件存在 + `--verify` 通过（`test_report.py` 复算样例、`test_gate.py` 跑样例基线） | ✅ M5 |
 | README 三场景复现 | 场景命令 | `README.md` | 干净 clone 按 README 跑通 | ⬜ 待 M6 |
-| 测试覆盖 | `tests/` | `pytest`（含 `slow` 标记的生成器确定性层） | 三类 hunk ✅ M2；patch-id/三态/worktree ✅ M3；revert 三状态/反向校验/unavailable ✅ M4；`--verify` 篡改定位/digest 跨时区/gate 四组退出码/受限 TOML 六种非法形态 ✅ M5 | ✅ M0–M5（快层 255 passed × 双解释器；慢层 1 passed） |
+| 测试覆盖 | `tests/` | `pytest`（含 `slow` 标记的生成器确定性层） | 三类 hunk ✅ M2；patch-id/三态/worktree ✅ M3；revert 三状态/反向校验/unavailable ✅ M4；`--verify` 篡改定位/digest 跨时区/gate 四组退出码/受限 TOML 六种非法形态 ✅ M5 | ✅ M0–M5（快层 257 passed × 双解释器；慢层 1 passed） |
 
 ## 里程碑
 

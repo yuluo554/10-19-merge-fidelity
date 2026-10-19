@@ -9,12 +9,13 @@
   `gitattributes_oid` / `config_overrides` / `range` / `as_of` /
   `findings_digest_algorithm:"sha256"`。**禁止**：扫描时刻、绝对路径、主机名、用户名、
   locale、Python 版本。
-* **`findings`**：把 `fidelity` 的 hunk 与 `ledger` 的条目统一成内容寻址 ID
-  （`sha1(merge_oid ‖ path ‖ old_range ‖ new_range ‖ kind)`，口径见 §4.5），
-  按 `(commit_time, merge_oid, path, old_range)` 排序——ID 因此可跨机器复算、可写进基线。
-* **`--verify=PATH`**：读回报告 → 重算 `digest_of(rest)` 校验（不匹配 → 退出码 1，
-  定位到 `digest`）→ 用**同一对象库**重跑模块、逐字节比较 → 首个差异用 JSON path 表达
-  （`merges[3].hunks[1].new_range`）→ 相等则退出码 0，stdout 打 `verified: N merges, M findings`。
+* **`findings`**：把三个模块的结论统一成**内容寻址 finding**（`sha1(commit_oid ‖ path ‖
+  old_range ‖ new_range ‖ kind)`，口径见 §4.5），按 `(commit_time, commit_oid, path, old_range)`
+  排序——ID 因此可跨机器复算、可写进基线。展开逻辑住在各自模块（`findings_of`）。
+* **`--verify=PATH`**：读回报告 → 用**同一对象库**重跑模块 → 与报告**去掉 `digest` 后**逐字节
+  比较（首个差异用 JSON path 表达，如 `fidelity.merges[3].hunks[1].new_range`）→ 内容一致再
+  校验 `digest` 自身 → 全过则退出码 0，stdout 打 `verified: N merges, M findings`。
+  **定位顺序是"先内容、后 digest"**：先查 digest 会把"哪一处被改了"的答案盖成 `digest`。
 * **坏 JSON / 缺 `digest` 字段 → 退出码 2**（缺字段 = 坏报告，不是"内容不一致"）。
 """
 
@@ -31,7 +32,7 @@ DIGEST_ALGORITHM = canonical.DIGEST_ALGORITHM
 
 NOTE_PARITY_NOT_REQUESTED = "parity_not_requested"
 
-# 从 fidelity hunk 与 ledger 条目派生 finding 时的 kind 取值（§4.5 的 kind 值域）
+
 # --------------------------------------------------------------------------- findings
 
 def collect_findings(fidelity_report, ledger_report, parity_report=None, *, repo=None):
@@ -49,10 +50,20 @@ def collect_findings(fidelity_report, ledger_report, parity_report=None, *, repo
 
 # --------------------------------------------------------------------------- 报告主体
 
-def _default_as_of(*stamps):
-    """报告 `as_of` = 输入报告里最新提交时间的 UTC 日期（**不读系统时钟**）。"""
-    values = [int(stamp) for stamp in stamps if stamp is not None]
-    stamp = max(values) if values else 0
+def _default_as_of(repo, end_rev, *dates):
+    """报告 `as_of` = 三源 `as_of` 里最大的日期（`YYYY-MM-DD` 按字典序即按时间序）。
+
+    为什么用各源的 `as_of` 而不是自己重算时间戳：`fidelity` / `ledger` / `parity`
+    各自都已把"本模块输入里的最新提交时间"算成日期，且**空输入都回落 `end_rev`（默认
+    `HEAD`）**。直接取最大值最省口径、也不会漏掉 parity（它只给日期，不给时间戳）。
+
+    全部为 `None`（例如空仓库、无提交）时才回落到 `end_rev` 的提交时间；
+    这样同一仓库的三个模块给出同一个 `as_of`，不会出现"report 落成 1970-01-01"。
+    """
+    values = [value for value in dates if value]
+    if values:
+        return max(values)
+    stamp = gitobj.commit_time(repo, end_rev)
     return datetime.datetime.fromtimestamp(stamp, datetime.timezone.utc).strftime("%Y-%m-%d")
 
 
@@ -88,7 +99,10 @@ def build_report(repo, *, range_spec=None, parity_from=None, parity_to=None,
 
     findings = collect_findings(fidelity_report, ledger_report, parity_report, repo=repo)
     if as_of is None:
-        as_of = _default_as_of(_stamp_of(fidelity_report), _stamp_of(ledger_report))
+        # 报告头 `as_of`：取三源 `as_of` 的最大值（各源空输入都回落 end_rev，口径一致）
+        as_of = _default_as_of(repo, end_rev, fidelity_report["as_of"],
+                               ledger_report["as_of"],
+                               parity_report["as_of"] if parity_report else None)
 
     return {
         "tool_version": __version__,
@@ -107,16 +121,6 @@ def build_report(repo, *, range_spec=None, parity_from=None, parity_to=None,
         "findings": findings,
         "notes": notes,
     }
-
-
-def _stamp_of(report):
-    """报告内的"最新提交时间"（不读时钟）：fidelity 取 merge 最大，ledger 取账本最大。"""
-    if report.get("module") == "fidelity":
-        return max([m["commit_time"] for m in report["merges"]] or [None])
-    stamps = []
-    for entry in report.get("entries") or []:
-        stamps.append(entry["reverted_commit_time"])
-    return max(stamps) if stamps else None
 
 
 # --------------------------------------------------------------------------- --verify
