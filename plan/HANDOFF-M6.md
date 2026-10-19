@@ -1,5 +1,9 @@
 # HANDOFF-M6 · 下一棒：发布（公开仓库 + v0.1.0 tag + Release 附件）
 
+> **状态：✅ 已完成（2026-10-19）**。发布留档见 `plan/RELEASE-M6.md`（两栏：tag 前事实 / tag 后追加事实）。
+> 本棒核心不是写代码，而是把"陌生人 30 秒能装上并看到输出"变成事实——过程中 CI 首推
+> 实测抓出并修掉 **3 个真缺陷**（见 §2.6）。
+>
 > 本文件由 M5 收尾时写入。上游：`plan/05-里程碑.md` 的 M6 行、`plan/06-交付对标.md` §四、`plan/01-题目文档.md` §三。
 > 用法：新对话 `/goal 读取 "<项目绝对路径>\plan\HANDOFF-M6.md" 继续完成任务`。
 
@@ -87,6 +91,19 @@ tag `v0.1.0` / Release 标题。**当前是 `0.1.0.dev0`，发布前统一改成
 - `sha256` 只写 Release 正文，**不写进包内**。
 - 留档 `plan/RELEASE-M6.md` 两栏：tag 前事实 / tag 后追加事实（run id 等）。
 - **CI 首推后据实补记 run id**，并把 `plan/00` 台账里的"CI 绿待首推验证"改成真实结论。
+
+### 2.6 CI 首推实测抓出的 3 个真缺陷（本棒新增，逐条已修 + 变异验证）
+
+> 本项目的 CI 此前**从未跑过**——所有"CI 绿"都是"本地等价校验，待首推验证"。首次推送后
+> 四个 job 全红，暴露出 3 个真缺陷。这条证据链正是"待首推验证"这一措辞的意义所在。
+
+| # | 缺陷 | 症状 | 修法 |
+|---|---|---|---|
+| 1 | **生成器部分运行会改写入仓的 `manifest.json`** | `generate()` 的 `if not only` 漏判 `--suite`：`--only`/`--suite` 时仍把 21 条记录覆盖成该套件的 12/6/3 条。测试的 autouse fixture 用 `--suite fidelity` 现生成仓库 → **一次普通 `pytest` 就静默改坏一个入仓文件** | 改成 `if not only and not suites`：部分生成不写 manifest |
+| 2 | **干净 clone 没有合成仓库，CI 直接 pytest 全挂** | `data/fixtures/**/repo/` 被 `.gitignore` 排除，检出后无仓库 → 依赖仓库的测试与全部 CLI 冒烟 step 全红 | CI 新增 `generate synthetic fixtures` step（**11→12 step**），置于 `pytest` 之前；同步更新 `test_workflow.py` 断言 |
+| 3 | **报告样例的 `git_version` 指纹跨机不同 → `--verify` 必然非 0** | 样例在本机 `2.54.0.windows.1` 生成，CI runner 是 `2.55.0` / `2.56.0.windows.2`；`git_version` 参与 digest，逐字节比较命中 `fidelity.git_version`，rc=1 | 定案：`git_version` 是**环境指纹**（`data/README.md` §4.6），跨机不同是设计如此。测试改两段——同版本强断言 rc=0；跨版本要求差异**恰好只落在指纹字段**（其余逐字节一致），两分支均已实测 |
+
+修复后 CI run `39199785754`（commit `cc00c47`）**四 job 全绿**（ubuntu-22.04 / windows-latest × py3.8 / py3.12，2026-10-19T04:30–04:36Z）。
 
 ### 2.5 收尾
 

@@ -25,10 +25,13 @@
 | M3 | `parity`：跨分支三态（`-U0` patch-id + apply 兜底）；6 个 fixture 双向与 golden 逐项一致 | ✅ 已完成 |
 | M4 | `ledger`：revert / 复活账本（反向 patch-id 校验 + `--find-object` 重放）；3 个 fixture 与 golden 逐项一致 | ✅ 已完成 |
 | M5 | `report`（规范 JSON + digest + `--verify`）/ `gate`（受限 TOML 基线 + 四组退出码） | ✅ 已完成 |
-| M6 | 发布：公开仓库 + v0.1.0 tag + Release 附件 | ⬜ 未开工 |
+| M6 | 发布：公开仓库 + v0.1.0 tag + Release 附件 | ✅ 已完成（2026-10-19；CI 四 job 全绿） |
 
 > 五个子命令全部可用（M5 起没有"骨架态"模块）。开发进度与逐项证据见
-> `plan/00-README总览.md`（承诺-证据台账 + 里程碑表）与各 `plan/HANDOFF-*.md`。
+> `plan/00-README总览.md`（承诺-证据台账 + 里程碑表）、各 `plan/HANDOFF-*.md`
+> 与发布留档 `plan/RELEASE-M6.md`。
+>
+> 仓库：<https://github.com/yuluo554/10-19-merge-fidelity>（MIT，`v0.1.0`）。
 
 ## 安装
 

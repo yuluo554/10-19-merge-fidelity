@@ -31,8 +31,8 @@
 | data/fixtures/ledger/ | revert 三状态 fixture（M4） | ✅ M4 落地（golden 与生产输出逐项一致） |
 | bench/fidelity.json · bench/parity.json · bench/ledger.json · bench/gate.json | 单进程批量 vs 逐进程（M2）；parity 端到端与 apply 兜底开销（M3）；ledger 条目数/三状态分布/耗时（M4）；gate 完整门禁路径耗时 + 基线命中数（M5） | ✅ M2/M3/M4/M5 |
 | audit-baseline.toml · docs/report-sample.json | 基线样例（`expires` + `justification`）与报告样例（规范 JSON + digest） | ✅ M5（两份样例都被测试复算） |
-| .github/workflows/ci.yml | 门禁接入示例（11 step，含 report/gate 冒烟） | ✅ M5（本地解析通过；CI 绿待首推验证） |
-| plan/RELEASE-M6.md | 发布留档（tag 时点事实 / tag 后追加事实分栏） | ⬜ 待 M6 |
+| .github/workflows/ci.yml | 门禁接入示例（12 step，含 fixture 生成 + report/gate 冒烟） | ✅ M6（CI 首推实测四 job 全绿，run `39199785754`） |
+| plan/RELEASE-M6.md | 发布留档（tag 时点事实 / tag 后追加事实分栏） | ✅ M6 |
 
 ## 决策记录表
 
@@ -115,7 +115,7 @@
 | 单进程批量架构 | 性能实测快照（✅ 基准日） | `fidelity` 默认路径 | `bench/fidelity.json`：8-merge 仓批量 0.061s vs 逐 merge 0.463s（实测 2026-10-18） | ✅ M2 |
 | 合成 fixture 可重建 | `tools/gen_fixtures.py`（固定作者/时间/树） | `data/fixtures/` | `--check` 重生成逐字节一致（实测 21/21，2026-10-18） | ✅ M1 |
 | 报告样例与基线样例 | 规范 JSON + TOML | `docs/report-sample.json`、`audit-baseline.toml` | 文件存在 + `--verify` 通过（`test_report.py` 复算样例、`test_gate.py` 跑样例基线） | ✅ M5 |
-| README 三场景复现 | 场景命令 | `README.md` | 干净 clone 按 README 跑通 | ⬜ 待 M6 |
+| README 三场景复现 | 场景命令 | `README.md` | 干净 clone 按 README 跑通（CI 矩阵 + 本机 fresh-clone 等价复现） | ✅ M6 |
 | 测试覆盖 | `tests/` | `pytest`（含 `slow` 标记的生成器确定性层） | 三类 hunk ✅ M2；patch-id/三态/worktree ✅ M3；revert 三状态/反向校验/unavailable ✅ M4；`--verify` 篡改定位/digest 跨时区/gate 四组退出码/受限 TOML 六种非法形态 ✅ M5 | ✅ M0–M5（快层 257 passed × 双解释器；慢层 1 passed） |
 
 ## 里程碑
@@ -128,7 +128,7 @@
 | M3 | parity | `parity` 可用；**6 个 fixture 的双向结果与 golden 逐项一致**；三态齐全且 `basis` 必填；`-U0` 跨行号/空白等价（`basis=patchid`）；临时 worktree 成功/异常两路径均无残留；`bench/parity.json` | ✅ 已完成（2026-10-18） |
 | M4 | ledger | `ledger` 可用；**三种 revert 状态识别正确且与 golden 逐项一致**；反向 patch-id 校验；`--find-object` 只作候选筛选、结论以 patch-id 为准；`REVERT_UNVERIFIED` 与"无 successor"分开输出；`bench/ledger.json` | ✅ 已完成（2026-10-19） |
 | M5 | report / gate | 规范 JSON + `--verify`；跨时区/quotepath digest 一致；`gate` 四组退出码语义全对；`audit-baseline.toml` 与 `docs/report-sample.json` 样例落地；CI 新增两个冒烟 step | ✅ 已完成（2026-10-19） |
-| M6 | 发布 | 干净环境按 README 跑通三场景；脱敏四步；tag + Release 附件；`plan/RELEASE-M6.md` 两栏留档 | ⬜ |
+| M6 | 发布 | 干净环境按 README 跑通三场景；脱敏四步；tag + Release 附件；`plan/RELEASE-M6.md` 两栏留档 | ✅ 已完成（2026-10-19；CI 首推实测抓出并修掉 3 个真缺陷，见 `plan/RELEASE-M6.md` §四） |
 
 ## 承诺-证据台账使用说明
 
