@@ -86,5 +86,8 @@
 | 1 | **生成器部分运行会改写入仓的 `manifest.json`** | `gen_fixtures --only/--suite` 时 `if not only` 判断不覆盖 `--suite`，把 21 条记录覆盖成该套件的 12/6/3 条 → `test_manifest_matches_directory_contents` 变红；测试的 autouse fixture 用 `--suite fidelity` 现生成仓库，**一次普通 `pytest` 就静默改坏入仓文件** | 部分生成（`--only` 或 `--suite`）时**不写** `manifest.json`（`if not only and not suites`） | 去掉 `and not suites` → 该测试变红 |
 | 2 | **干净 clone 没有合成仓库，CI 直接 pytest 全挂** | `data/fixtures/**/repo/` 被 `.gitignore` 排除，CI 检出后无仓库 → 所有依赖仓库的测试与 CLI 冒烟全红 | CI 新增 `generate synthetic fixtures` step（step 数 11→12），置于 `pytest` 之前；同步更新 `test_workflow.py` 的 step 断言 | 删掉该 step → CI 复现全红（首推实测） |
 | 3 | **报告样例的 `git_version` 指纹跨机不同 → `--verify` 必然非 0** | 样例在本机 `2.54.0.windows.1` 生成，CI runner 是 `2.55.0` / `2.56.0.windows.2`；`git_version` 参与 digest，故逐字节比较命中 `fidelity.git_version`，rc=1 | 定案：`git_version` 是**环境指纹**（`data/README.md` §4.6），跨机不同**是设计如此**。测试改两段——同版本强断言 rc=0；跨版本要求差异**恰好只落在指纹字段**（其余逐字节一致） | 伪造 `git_version` → 断言仍要求 rc=1 且 `json_path=fidelity.git_version`（两分支均已实测） |
+| 4 | **`--show-kind` 的 argparse `choices=` 拒绝文档化的逗号列表**（**发布包实测**抓出，比前三个更晚） | `plan/03` §1.1 与 README 场景一的口径是 `--show-kind=smuggled,dropped`，`fidelity._kinds_from_args` 也实现了逗号拆分，但 `cli.py` 给该选项加了 `choices=("smuggled","dropped","resolution","all")` → argparse 把整串当一个值拒绝。**干净环境按 README 跑场景一 → 退出码 2**，"陌生人 30 秒"直接卡在第一条命令 | 去掉 `choices=`，逗号拆分与非法值报错交给 `_kinds_from_args`（`UsageError` → 退出码 2）；`--help` 的 metavar 改为 `KINDS` | 新增 2 条测试：`--show-kind=smuggled,dropped` / `=all` / `=dropped,resolution` 必须被接受（rc=0）；`=weird` 仍 rc=2 |
 
-**结论**：3 个缺陷都已修复并在 CI 上复验为绿（run `39199785754`，4 job 全绿）。
+**结论**：4 个缺陷都已修复。缺陷 1–3 由 CI 首推实测抓出（run `39199785754` → 修复后 `39202465908` 四 job 全绿）；
+缺陷 4 由**发布包干净环境实测**抓出（从 Release 下载 tar.gz → 解包 → 新建 venv → 按 README 跑三场景时命中），
+修正在 commit `d9ea34a`。
