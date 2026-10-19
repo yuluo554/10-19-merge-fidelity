@@ -64,35 +64,46 @@
 
 ## 三、tag 后追加事实
 
-| 项 | 值 |
-|---|---|
-| tag（annotated 对象） | `7f82fac`（`git rev-parse v0.1.0`） |
-| tag 指向的 commit | `33e1ca4`（`git rev-parse v0.1.0^{commit}`） |
-| Release URL | <https://github.com/yuluo554/10-19-merge-fidelity/releases/tag/v0.1.0> |
-| Release 状态 | 非草稿、非预发布（`isDraft=false`、`isPrerelease=false`） |
-| 源码包名 | `mergefidelity-0.1.0.tar.gz`（194710 字节） |
-| 源码包 sha256 | `ef8e9d1659a6f367b78767f410bb547e7cf310ce7908076710e30f9429c3f55e` |
-| `SHA256SUMS` 附件 | 同上一行（93 字节，`sha256sum -c` 通过） |
-| 构建可复现性 | 3 次 `git archive v0.1.0 \| gzip -9n` 逐字节一致（`cmp` 通过） |
-| CI run（首推，修复 3 缺陷） | `39197159675`（红）→ `39199785754`（绿，commit `cc00c47`） |
-| CI run（文档收尾） | `39202465908`（绿，commit `fbb0ab6`） |
-| CI run（修第 4 缺陷） | `39205421988`（绿，commit `d9ea34a`） |
-| CI run（修第 5/6 缺陷） | `39212350631`（绿，commit `55dfea9`） |
-| CI run（**最终发布提交**） | `39214226318`（**绿**，commit `33e1ca4`，四 job 全绿） |
+> **本节在 tag 树内是占位骨架，字面值见 tag 之后的 `plan/` 提交（`main` 上的 HEAD 版本）。**
+>
+> 原因（自指）：源码包由 `git archive v0.1.0` 生成，而本节要记录**该源码包的 sha256 与 tag 自身 OID**。
+> 若把这些值写进 tag 树，包的内容随之改变 → sha256 变 → 写进去的值立刻失真，循环无解。
+> 因此按 HANDOFF 的两栏约定：tag 树只承载"tag 前事实"（§二）与占位骨架；
+> tag 后产生的事实在 tag 之后的 `plan/` 提交里补齐（发布后只允许 `plan/`、`README.md` 面提交）。
+
+| 项 | tag 树内 | 权威值位置 |
+|---|---|---|
+| tag（annotated 对象） OID | 见 `git rev-parse v0.1.0` | HEAD 版本文档 |
+| tag 指向的 commit | 见 `git rev-parse v0.1.0^{commit}` | HEAD 版本文档 |
+| Release URL | <https://github.com/yuluo554/10-19-merge-fidelity/releases/tag/v0.1.0> | HEAD 版本文档 |
+| Release 状态 | 非草稿、非预发布 | HEAD 版本文档 |
+| 源码包名 | `mergefidelity-0.1.0.tar.gz` | HEAD 版本文档 |
+| 源码包 sha256 | **不在包内记录**（规则：sha256 只写 Release 正文） | HEAD 版本文档 + Release 正文 |
+| `SHA256SUMS` 附件 | 与源码包同 sha256 | Release 附件 |
+| 构建可复现性 | 3 次 `git archive v0.1.0 \| gzip -9n` 逐字节一致（`cmp` 通过） | HEAD 版本文档 |
+| CI run | 首发红：`39197159675`；其后每一轮修复后均四 job 全绿 | HEAD 版本文档 |
 
 ### 3.1 tag 移动记录（如实留档）
+
+> 本节记录的是**过程事实**（移动发生过），字面 OID/sha 值同样在 HEAD 版本补齐——
+> 理由同上（把"最终 tag 的 OID"写进 tag 树会自指失真）。
 
 | 时点 | tag → commit | 源码包 sha256 | 原因 |
 |---|---|---|---|
 | 首次发布 | `e6ddce8` → `fbb0ab6` | `a064e105…` | 按当时 CI 绿（`39202465908`）发布 |
 | 第 1 次修正 | `097ae82` → `f23438e` | `b8f3e411…` | **发布包实测**发现 README 场景一的 `--show-kind=smuggled,dropped` 退出码 2（缺陷 4）；修复提交 `d9ea34a` 后 CI 绿（`39206716739`），tag 移至 `f23438e` |
 | 第 2 次修正 | `3f6ca2c` → `55dfea9` | `662679f2…` | 继续在发布包里按 README 跑 `pytest`，又发现缺陷 5/6（无 `.git` 时 `git ls-files` 128、慢层 `--check` 冻结仓库不存在）；修复后 CI 绿（`39212350631`），tag 移至 `55dfea9` |
-| 第 3 次修正（定稿） | `7f82fac` → `33e1ca4` | `ef8e9d16…` | 发布包实测发现 README 未说明"合成仓库需先生成"（按文档直接跑场景 → 退出码 3）；补齐前置命令与"开发"说明后 CI 绿（`39214226318`），tag 定为 `33e1ca4` |
+| 第 3 次修正 | `7f82fac` → `33e1ca4` | `ef8e9d16…` | 发布包实测发现 README 未说明"合成仓库需先生成"（按文档直接跑场景 → 退出码 3）；补齐前置命令与"开发"说明后 CI 绿（`39214226318`），tag 移至 `33e1ca4` |
+| 第 4 次修正 | —— | —— | 发现本节在 tag 树内写了**过时的 tag OID/sha**（自指导致），改为占位骨架。**本次移动的字面事实在 tag 之后的 `plan/` 提交里补记**（不在本树内，避免再次自指） |
 
 **为什么允许移动**：`v0.1.0` 发布仅数十分钟、无真实下游（附件下载数均为本轮自校验），
 而留在任一旧 tag 都会直接违反 M6 的 DoD（"干净 clone 按 README 跑通三场景"）。
 这是**刻意的取舍**，不是疏漏；若将来已有人依赖该 tag，则应按"另发 v0.1.1"处理而非移动。
 每一轮移动都重建附件、重写 Release 正文，并把旧 sha256 留在本表——不掩盖历史。
+
+> **本节在 tag 树内注定是"上一拍"的快照**：只要把"本 tag 的 OID / 本包的 sha256"写进被 tag
+> 的树，写进去的值就会让包内容变化、sha 立即失真。因此规则是：**tag 树只写到"第 N 次移动"为止，
+> 第 N 次本身的字面值写在 tag 之后的 `plan/` 提交**。这不是遗漏，是自指约束下的唯一自洽写法。
 
 ### 3.2 发布后干净环境实测（最终附件）
 
