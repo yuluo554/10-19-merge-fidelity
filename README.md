@@ -31,7 +31,7 @@
 > `plan/00-README总览.md`（承诺-证据台账 + 里程碑表）、各 `plan/HANDOFF-*.md`
 > 与发布留档 `plan/RELEASE-M6.md`。
 >
-> 仓库：<https://github.com/yuluo554/10-19-merge-fidelity>（MIT，`v0.1.0`）。
+> 仓库：<https://github.com/yuluo554/merge-fidelity>（MIT，`v0.1.0`）。
 
 ## 安装
 
