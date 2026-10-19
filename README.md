@@ -47,6 +47,20 @@ Windows 上 `python` 可能是应用商店占位符，用 `py -3.8` / `py -3.12`
 
 > 五个子命令均已可用。下面三条是最小复现通路；`docs/report-sample.json` 与
 > `audit-baseline.toml` 是入仓的样例产物（对合成 fixture 生效，可 `--verify` 复算）。
+>
+> **想就地复算样例**（而不是扫自己的仓库）：合成 fixture 仓库是生成物、不入包，
+> 先跑一次生成器把 21 个仓库建出来（固定作者/时间/树，可位级重建）：
+>
+> ```bash
+> py -3.8 -X utf8 tools/gen_fixtures.py --out data/fixtures            # 首次需要
+> py -3.8 -X utf8 tools/gen_fixtures.py --out data/fixtures --check    # 断言逐字节一致
+> mergefidelity report data/fixtures/fidelity/smuggle-extra-line/repo \
+>     --verify docs/report-sample.json          # → verified: 1 merges, 1 findings
+> mergefidelity gate data/fixtures/fidelity/smuggle-extra-line/repo \
+>     --baseline audit-baseline.toml            # → 退出码 0（baselined=1）
+> ```
+>
+> 下面的 ` /path/to/repo ` 换成你自己的仓库即可（对**任意** git 仓库都适用，不依赖 fixture）。
 
 ```bash
 # 场景一：扫描一个仓库的全部 merge，看有哪些夹带/吞掉
@@ -198,5 +212,9 @@ mergefidelity report /path/to/repo --parity-from=release/1.0 --parity-to=main   
 py -3.8 -m pytest -q          # 另一条通道：py -3.12 -m pytest -q
 ```
 
+- 测试会自动补齐缺失的合成仓库（`data/fixtures/**/repo/` 是生成物、不入包），
+  因此从源码包解包后可直接 `pytest`，无需先手动生成。
+- 手工源码包（`git archive`）**不含 `.git`**：依赖 git 的两条检查（"合成仓库未被跟踪"）
+  在这种环境下会 `skip`，其余测试照常运行。
 - 计划与口径：`plan/00`–`06`、`data/README.md`（数值口径唯一权威）
 - 许可：MIT，见 [LICENSE](LICENSE)
