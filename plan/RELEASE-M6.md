@@ -105,9 +105,40 @@
 > 的树，写进去的值就会让包内容变化、sha 立即失真。因此规则是：**tag 树只写到"第 N 次移动"为止，
 > 第 N 次本身的字面值写在 tag 之后的 `plan/` 提交**。这不是遗漏，是自指约束下的唯一自洽写法。
 
+### 3.3 权威值（本小节只在 tag 之后的提交里存在，tag 树内无此节）
+
+以下值由 tag/Release 落地后实测填写，**不参与任何源码包生成**：
+
+| 项 | 值 |
+|---|---|
+| tag（annotated 对象） | `a28e1ab`（`git rev-parse v0.1.0`） |
+| tag 指向的 commit | `5b001c1`（`git rev-parse v0.1.0^{commit}`） |
+| Release URL | <https://github.com/yuluo554/10-19-merge-fidelity/releases/tag/v0.1.0> |
+| Release 状态 | 非草稿、非预发布（`isDraft=false`、`isPrerelease=false`） |
+| 源码包名 / 大小 | `mergefidelity-0.1.0.tar.gz`（193878 字节） |
+| 源码包 sha256 | `43f8f8f46e259dbaf7f55a593c67ae7d6e78dafea486d78924717f4a19b90279` |
+| `SHA256SUMS` 附件 | 同上一行（93 字节；下载后 `sha256sum -c` 通过） |
+| 构建可复现性 | 3 次 `git archive v0.1.0 \| gzip -9n` 逐字节一致（`cmp` 通过） |
+| CI run（最终发布提交） | `39215399710`（**绿**，commit `5b001c1`，四 job 全绿） |
+| 发布包内 `pytest` | **258 passed, 1 skipped**（skip = 无 `.git`，忽略规则生效与否不可判） |
+
+**tag 移动总表**（与 §3.1 对应，此处含第 4 次）：
+
+| 时点 | tag → commit | 源码包 sha256 |
+|---|---|---|
+| 首次发布 | `e6ddce8` → `fbb0ab6` | `a064e105…` |
+| 第 1 次修正 | `097ae82` → `f23438e` | `b8f3e411…` |
+| 第 2 次修正 | `3f6ca2c` → `55dfea9` | `662679f2…` |
+| 第 3 次修正 | `7f82fac` → `33e1ca4` | `ef8e9d16…` |
+| 第 4 次修正（定稿） | `a28e1ab` → `5b001c1` | `43f8f8f4…` |
+
+**全部动作已被 CI 验证**：最终 commit `5b001c1` 的 run `39215399710` 四 job 全绿；
+最终**发布包**（下载自 Release）内 258 passed / 1 skipped，README 三场景与两条样例复算均按声明退出码通过。
+
 ### 3.2 发布后干净环境实测（最终附件）
 
 从 Release 重新下载 → `sha256sum -c` 通过 → 解包 → `py -3.8 -m venv` 新建 → `pip install -e ".[dev]"`：
+
 
 | 检查 | 结果 |
 |---|---|
