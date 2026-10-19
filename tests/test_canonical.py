@@ -75,13 +75,13 @@ def test_range_str():
 
 def test_sort_findings_uses_declared_key():
     items = [
-        {"commit_time": 20, "merge_oid": "b", "path": "p", "old_range": "-"},
-        {"commit_time": 10, "merge_oid": "a", "path": "p", "old_range": "-"},
-        {"commit_time": 10, "merge_oid": "a", "path": "p", "old_range": "1,1"},
+        {"commit_time": 20, "commit_oid": "b", "path": "p", "old_range": "-"},
+        {"commit_time": 10, "commit_oid": "a", "path": "p", "old_range": "-"},
+        {"commit_time": 10, "commit_oid": "a", "path": "p", "old_range": "1,1"},
     ]
     ordered = canonical.sort_findings(items)
     assert [i["commit_time"] for i in ordered] == [10, 10, 20]
-    assert ordered[-1]["merge_oid"] == "b"
+    assert ordered[-1]["commit_oid"] == "b"
 
 
 def test_write_atomic_writes_lf_and_replaces(tmp_path):

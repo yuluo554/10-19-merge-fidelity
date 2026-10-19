@@ -1,0 +1,19 @@
+# audit-baseline.toml —— 带过期时间的基线样例（gate 子命令用）
+#
+# 格式口径见 data/README.md §4.7：每条 `[[finding]]` 必须含
+#   id            = 内容寻址 finding ID（sha1(merge_oid ‖ path ‖ old_range ‖ new_range ‖ kind)）
+#   expires       = "YYYY-MM-DD"，按报告内 as_of 日期比较（as_of <= expires 视为未过期）
+#   justification = 非空字符串，缺省即语法错误（退出码 2）
+#
+# 本构建只支持**受限 TOML 子集**：`[[finding]]` + 字符串值 + 注释。
+# 数组 / 嵌套表 / 多行字符串 / 非字符串值 → 退出码 2（toml_unsupported，含行号）。
+#
+# 用法（本样例对合成 fixture `smuggle-extra-line` 的真实 finding 生效）：
+#   py tools/gen_fixtures.py --out data/fixtures --only smuggle-extra-line
+#   mergefidelity gate data/fixtures/fidelity/smuggle-extra-line/repo #       --baseline audit-baseline.toml            # → 退出码 0，baselined=1
+#   # 把 expires 改到过去 → 退出码 1，expired=1（旧账自动重新报警）
+
+[[finding]]
+id = "a387b28fd982ca83a26026a3774c550ada1b1492"
+expires = "2099-12-31"
+justification = "样例条目：合成 fixture 的已知夹带，机械合并上下文差异，见 #12"

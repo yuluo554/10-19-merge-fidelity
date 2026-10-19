@@ -92,10 +92,14 @@ def range_str(start, count, side_present=True):
 
 
 def sort_key_finding(finding):
-    """finding 的规范排序键：``(commit_time, oid, path, old_range)``。"""
+    """finding 的规范排序键：``(commit_time, commit_oid, path, old_range)``。
+
+    `commit_oid` 是"该 finding 挂在哪个提交上"（fidelity 的 merge / ledger 的 revert /
+    parity 的候选提交）。全项目只有这一处排序口径。
+    """
     return (
         int(finding.get("commit_time", 0)),
-        str(finding.get("merge_oid", "")),
+        str(finding.get("commit_oid", "")),
         str(finding.get("path", "")),
         str(finding.get("old_range", "")),
     )

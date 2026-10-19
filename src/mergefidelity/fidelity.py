@@ -159,6 +159,36 @@ def require_ref(repo, ref, flag):
         raise UsageError("%s 不是有效引用：%s" % (flag, ref))
 
 
+def range_end(spec):
+    """报告头指纹用的"范围右端"：`A..B` → `B`；单个 REV → 它自己；无范围 → `HEAD`。
+
+    `.gitattributes` 会改变 merge driver 的判定，因此它的 blob OID 必须进报告头；
+    取范围右端而不是恒取 HEAD，才能让"扫历史某个区间"的报告也如实反映**那个时点**的 attributes。
+    `ledger` 与 `report` 复用本函数，全项目只有这一处口径。
+    """
+    if not spec:
+        return "HEAD"
+    separator = "..." if "..." in spec else ".."
+    if separator not in spec:
+        return spec
+    _left, _, right = spec.partition(separator)
+    return right or "HEAD"
+
+
+def validate_as_of(value):
+    """`--as-of` 必须是 `YYYY-MM-DD`；坏值归用法错误（2）。
+
+    全项目只有这一处实现（`fidelity` 定义 as_of 纪律，`ledger`/`report`/`gate` 复用）。
+    """
+    if value is None:
+        return None
+    try:
+        datetime.datetime.strptime(value, "%Y-%m-%d")
+    except (TypeError, ValueError):
+        raise UsageError("--as-of 必须是 YYYY-MM-DD：%r" % (value,))
+    return value
+
+
 def validate_range_spec(repo, spec):
     """校验 `A..B` / `A...B` 的两侧（空侧视为省略），坏的一侧报用法错误。"""
     if spec is None:
@@ -282,7 +312,7 @@ def scan(repo, *, since=None, until=None, range_spec=None, as_of=None,
     if as_of is None:
         as_of = _default_as_of(repo, end_rev, merge_oids)
     else:
-        _validate_as_of(as_of)
+        validate_as_of(as_of)
 
     octopus = len([item for item in skipped if item["reason"] == "octopus"])
     report = {
@@ -311,13 +341,6 @@ def scan(repo, *, since=None, until=None, range_spec=None, as_of=None,
         },
     }
     return report
-
-
-def _validate_as_of(value):
-    try:
-        datetime.datetime.strptime(value, "%Y-%m-%d")
-    except (TypeError, ValueError):
-        raise UsageError("--as-of 必须是 YYYY-MM-DD：%r" % (value,))
 
 
 def _default_as_of(repo, end_rev, merge_oids):
@@ -389,6 +412,30 @@ def _fail_on_hits(report, fail_on):
     if fail_on == "dropped":
         return report["summary"]["dropped"]
     return report["summary"]["smuggled"] + report["summary"]["dropped"]
+
+
+def findings_of(report):
+    """把扫描报告的 hunk 展开成**内容寻址 finding** 列表（`report`/`gate` 共用）。
+
+    ID 口径见 `data/README.md` §4.5：`sha1(merge_oid ‖ path ‖ old_range ‖ new_range ‖ kind)`。
+    hunk 的 `kind` 即 `SMUGGLED` / `DROPPED` / `RESOLUTION`；不含 `commit_time` 参与 ID
+    （时间只用于排序），因此同一 finding 在任何机器上重算相同。
+    """
+    items = []
+    for merge in report["merges"]:
+        for hunk in merge["hunks"]:
+            items.append({
+                "id": canonical.finding_id(merge["merge_oid"], hunk["path"],
+                                           hunk["old_range"], hunk["new_range"],
+                                           hunk["kind"]),
+                "kind": hunk["kind"],
+                "commit_oid": merge["merge_oid"],
+                "commit_time": merge["commit_time"],
+                "path": hunk["path"],
+                "old_range": hunk["old_range"],
+                "new_range": hunk["new_range"],
+            })
+    return items
 
 
 def run(args):

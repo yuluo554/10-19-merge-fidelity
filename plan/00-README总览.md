@@ -21,16 +21,17 @@
 | plan/HANDOFF-M2.md | 下一棒（`fidelity scan`）交接快照 | ✅ M1 收尾（历史） |
 | plan/HANDOFF-M3.md | 下一棒（`parity`）交接快照 | ✅ M2 收尾（历史） |
 | plan/HANDOFF-M4.md | 下一棒（`ledger`）交接快照 | ✅ M3 收尾（历史） |
-| plan/HANDOFF-M5.md | 下一棒（`report` / `gate`）交接快照 | ✅ M4 收尾 |
+| plan/HANDOFF-M5.md | 下一棒（`report` / `gate`）交接快照 | ✅ M4 收尾（历史） |
+| plan/HANDOFF-M6.md | 下一棒（发布：公开仓库 + v0.1.0）交接快照 | ✅ M5 收尾 |
 | plan/AUDIT-M0-M2.md | M0–M2 全面审计记录（发现/修复/复验证据/残余缺口） | ✅ 2026-10-18 |
 | data/README.md | 依据查证记录（三态）/ 数据源可获取性 / 合成数据纪律 / 数值口径 | ✅ v1 |
 | .gitignore / .gitattributes / LICENSE / README.md | 工程基座 | ✅ M0 |
-| pyproject.toml / src/ / tests/ / tools/ | 可安装骨架、CLI 契约、fixture 生成器与基准；`fidelity`、`parity`、`ledger` 已实现，其余两模块仍为骨架态 | 🔶 M0 骨架 + M2 fidelity + M3 parity + M4 ledger |
+| pyproject.toml / src/ / tests/ / tools/ | 可安装 CLI、五子命令实现、fixture 生成器与基准（骨架态已退役，无占位模块） | ✅ M0 骨架 + M2/M3/M4/M5 全部模块落地 |
 | data/fixtures/{fidelity,parity,ledger}/ | 12 + 6 + 3 个合成仓库的生成脚本 + golden JSON（`--check` 位级一致） | ✅ M1/M2 |
 | data/fixtures/ledger/ | revert 三状态 fixture（M4） | ✅ M4 落地（golden 与生产输出逐项一致） |
-| bench/fidelity.json · bench/parity.json · bench/ledger.json | 单进程批量 vs 逐进程基准（M2）；parity 端到端与 apply 兜底开销（M3）；ledger 条目数/三状态分布/耗时（M4） | ✅ M2/M3/M4；gate 待 M5 |
-| audit-baseline.toml | 基线样例（`expires` + `justification`，M5） | ⬜ 待 M5 |
-| .github/workflows/ci.yml | 门禁接入示例（M5） | ⬜ 待 M5 |
+| bench/fidelity.json · bench/parity.json · bench/ledger.json · bench/gate.json | 单进程批量 vs 逐进程（M2）；parity 端到端与 apply 兜底开销（M3）；ledger 条目数/三状态分布/耗时（M4）；gate 完整门禁路径耗时 + 基线命中数（M5） | ✅ M2/M3/M4/M5 |
+| audit-baseline.toml · docs/report-sample.json | 基线样例（`expires` + `justification`）与报告样例（规范 JSON + digest） | ✅ M5（两份样例都被测试复算） |
+| .github/workflows/ci.yml | 门禁接入示例（11 step，含 report/gate 冒烟） | ✅ M5（本地解析通过；CI 绿待首推验证） |
 | plan/RELEASE-M6.md | 发布留档（tag 时点事实 / tag 后追加事实分栏） | ⬜ 待 M6 |
 
 ## 决策记录表
@@ -84,6 +85,14 @@
 | 2026-10-19 | **`--find-object` 只收窄候选，结论口径以 patch-id 相等为准；不可用时不降级猜** | git ≥2.16 才有 `--find-object`；低于门槛（或命令失败）时写 `unavailable=[{reason:git_too_old,capability:find-object}]` 并只给 `REVERT_UNVERIFIED`——"这条 revert 没有 successor"是一个**断言**，缺证不能下（与 `parity --no-apply-fallback` 不声称 MISSING 同源）。 |
 | 2026-10-19 | **`gitobj.commit_diff` 增加 `reverse=True`** | `ledger` 需要"取反 diff"（`diff-tree <c> <c>^`）算反向 patch-id；根提交没有父提交、取反无意义 → 返回 `None`，调用方据此判该提交不可校验。diff 参数构造仍只在 `gitobj` 一处。 |
 | 2026-10-19 | **`--find-object` 只加速命中，不足以支撑"没有"**（M4 实测抓出的真缺陷） | `-U0` patch-id 对空白免疫，而 `--find-object` 认的是 blob 内容：一次"只差空白 + 文件别处已变"的重新落地，其 old/new blob **都不在**筛选集里——只做筛选就会把它报成 `REVERTED_NO_SUCCESSOR`（静默漏报，正是本工具要审计的毛病）。修法：筛选集落空时**回到全量 later 提交复扫**（结论口径始终是 patch-id 相等）。实测复现 `test_reland_invisible_to_find_object_is_still_then_redone`；变异验证：删掉复扫那一步 → 该测试变红。 |
+| 2026-10-19 | **M5 起实现 `report`：`findings` 三源合一，展开逻辑住在各自模块** | 报告把 `fidelity` 的 hunk、`ledger` 的条目、`parity` 的 `PARITY_MISSING`/`PARITY_MODIFIED` 统一成**内容寻址 finding**（§4.5 的 ID 口径），按 `(commit_time, commit_oid, path, old_range)` 排序。展开由各模块的 `findings_of(report)` 产出——它们才是 ID 口径的产出方，`report.collect_findings` 只汇总。finding 字段固定 7 项；`commit_time` **不参与 ID**（只排序），因此跨机器重算 ID 相同。 |
+| 2026-10-19 | **`report` 的报告头字段名与"挂哪个提交"用 `commit_oid`，不叫 `merge_oid`** | `parity` 的 finding 挂在候选提交上、`ledger` 的挂在 revert 上——都不一定是 merge。"叫 `merge_oid` 但装的是 revert"是文档与代码互相误导的典型；排序键同步改为 `(commit_time, commit_oid, path, old_range)`。 |
+| 2026-10-19 | **`--verify` 的定位顺序是"先内容、后 digest"**（M5 实测抓出的设计点） | 原计划（`plan/03` §4.3 初稿）先做 digest 自校验：结果任何内容篡改都会先命中 `digest` 字段，把"哪一处被改了"这个真正有用的答案盖掉。定案：先用同一对象库重推、与读回报告**去掉 `digest` 后**逐字节比较（差异定位到被改字段，含嵌套路径），内容一致再查 `digest` 自身（定位到 `digest`）。digest 负责**发现**不一致，JSON path 负责**定位**，定位必须落在真实差异上。变异验证：把 digest 检查挪到前面 → 两条篡改测试变红。 |
+| 2026-10-19 | **`gate` 全量收集两类，`--fail-on` 只过滤 `new`**（M5 实测抓出的设计点） | `baselined`/`expired` 是对"基线条目是否仍然命中"的回答，必须覆盖全部事故类（`SMUGGLED`+`DROPPED`）；若只扫 `--fail-on` 那一类，另一类的基线条目会因"没扫到"而变成 `stale`——**一条已登记在案的旧账被误报成"已修复"**。实测复现 `test_baseline_coverage_is_not_filtered_by_fail_on`；变异验证：`_scan_kinds()` 返回 `FAIL_ON_KINDS[fail_on]` → 该测试变红。 |
+| 2026-10-19 | **`report`/`ledger` 复用 `fidelity.range_end` 与 `fidelity.validate_as_of`** | 口径只留一处：`gitattributes_oid` 取范围右端（`A..B`→`B`、单 REV→它自己、无范围→`HEAD`）由 `fidelity.range_end` 定义，`ledger` 的私有 `_range_end` 删除；`--as-of` 的 `YYYY-MM-DD` 校验由 `fidelity.validate_as_of` 定义，`ledger`/`parity` 的 `_validate_as_of` 删除。避免三份实现各自漂移。 |
+| 2026-10-19 | **`gate` 的基线是受限 TOML 子集，非法形态必须带行号** | 3.8 无 `tomllib`，自写解析器只认 `[[finding]]` + 单行基本字符串 + 注释；数组 / 嵌套表 / 多行字符串 / 内联表 / 非字符串值 / 未知键 → `toml_unsupported`（退出码 2，**明示行号**）；缺键 / 坏日期 / 重复 id / 段外键值 / 空基线 → 语法错误（2）。空基线等于"没有门禁"，不得静默放行。 |
+| 2026-10-19 | **`gate` 先解析基线再跑扫描（零副作用）** | 基线坏掉时不得留下任何产物（含 `--out` 文件）：解析排在扫描之前，此时还没跑 git、也没写盘。测试 `test_bad_baseline_writes_nothing` 断言 `--out` 路径不存在。 |
+| 2026-10-19 | **骨架态退役完成：`errors.NotReadyError` 删除** | M0 定的"可运行空壳"纪律（未实现模块以退出码 2 + 中文提示收场、不伪造空结果）随五个子命令全部落地而结束。三处同步退役：`report.py`/`gate.py` 的 `raise`、`errors.py` 的异常类、`tests/test_readme_gate.py` 的登记测试（改成**空集守门**：断言 `NotReadyError` 属性不存在且无模块含 `NotReadyError`/`NotImplementedError`/`TODO`）、`tests/test_cli.py` 的 not-ready 参数（改成"坏输入文件 → 2 + 中文提示"）。 |
 
 ## 承诺-证据台账
 
@@ -100,14 +109,14 @@
 | 空白免疫与跨行号等价 | `-U0` + `patch-id --stable`（✅ 本地复算） | `parity` 的 `u0_patchid` | `context-shift`（第 2 行 vs 第 5 行）与 `whitespace`（`value=1` vs `value =    1`）均 `PRESENT(basis=patchid)`（实测） | ✅ M3 |
 | 临时 worktree 零残留 | `git worktree add --detach` + 三连清理（✅ 本地复算） | `parity` 的 apply 兜底 | 成功与异常两条路径后 `git worktree list` 只剩主工作树（实测，2026-10-18） | ✅ M3 |
 | revert 账本（REVERTED_NO_SUCCESSOR / THEN_REDONE / UNVERIFIED） | `--grep='^This reverts commit'` + patch-id 反向校验 + `--find-object` 重放（✅ 本地复算） | `ledger` 子命令 | 三种状态 fixture 与 golden 逐项一致；`UNAVAILABLE` 与"无 successor"是不同输出（实测，2026-10-19） | ✅ M4 |
-| 内容寻址 finding ID | `sha1(merge_oid‖path‖old_range‖new_range‖kind)`（✅ 口径已定） | 报告 `findings[*].id` | 独立实现重算 sha1 + 改一字节 `--verify` 非 0 | ⬜ 待 M5 |
-| 可复现 digest | 规范 JSON（固定键序/排序，无时间/路径/主机名） | 报告 `digest` + `--verify` | 两台机器不同时区/`core.quotepath` 同 digest | ⬜ 待 M5 |
-| 过期基线门禁 | `audit-baseline.toml` 的 `expires`/`justification` | `gate` 子命令退出码 | 新增/旧账/过期/语法错误四组 | ⬜ 待 M5 |
+| 内容寻址 finding ID | `sha1(merge_oid‖path‖old_range‖new_range‖kind)`（✅ 口径已定） | `report` 的 `findings[*].id`（三源合一，各模块 `findings_of` 产出） | 独立实现重算 sha1（`test_report.py::test_findings_ids_are_content_addressed`）+ 改一字节 `--verify` 定位到被改字段（实测，2026-10-19） | ✅ M5 |
+| 可复现 digest | 规范 JSON（固定键序/排序，无时间/路径/主机名） | `report` 的 `digest` + `--verify` | 换时区（`TZ=America/New_York` vs `Asia/Shanghai`）与 `core.quotepath=true/false` 下 digest 相同；报告头禁止字段断言（实测，2026-10-19） | ✅ M5 |
+| 过期基线门禁 | `audit-baseline.toml` 的 `expires`/`justification` | `gate` 子命令退出码 | 四组退出码（新增 1 且只报新增 / 旧账 0 且 `baselined` / 过期 1 且 `expired` / 坏基线 2 + 行号 + 零产物）；`stale` 只提示；`--fail-on` 只过滤 `new`（实测，2026-10-19） | ✅ M5 |
 | 单进程批量架构 | 性能实测快照（✅ 基准日） | `fidelity` 默认路径 | `bench/fidelity.json`：8-merge 仓批量 0.061s vs 逐 merge 0.463s（实测 2026-10-18） | ✅ M2 |
 | 合成 fixture 可重建 | `tools/gen_fixtures.py`（固定作者/时间/树） | `data/fixtures/` | `--check` 重生成逐字节一致（实测 21/21，2026-10-18） | ✅ M1 |
-| 报告样例与基线样例 | 规范 JSON + TOML | `docs/report-sample.json`、`audit-baseline.toml` | 文件存在 + `--verify` 通过 | ⬜ 待 M5 |
+| 报告样例与基线样例 | 规范 JSON + TOML | `docs/report-sample.json`、`audit-baseline.toml` | 文件存在 + `--verify` 通过（`test_report.py` 复算样例、`test_gate.py` 跑样例基线） | ✅ M5 |
 | README 三场景复现 | 场景命令 | `README.md` | 干净 clone 按 README 跑通 | ⬜ 待 M6 |
-| 测试覆盖 | `tests/` | `pytest`（含 `slow` 标记的生成器确定性层） | 三类 hunk ✅ M2；patch-id/三态/worktree ✅ M3；revert 三状态/反向校验/unavailable ✅ M4；`--verify`/退出码 ⬜ M5 | 🔶 进行中 |
+| 测试覆盖 | `tests/` | `pytest`（含 `slow` 标记的生成器确定性层） | 三类 hunk ✅ M2；patch-id/三态/worktree ✅ M3；revert 三状态/反向校验/unavailable ✅ M4；`--verify` 篡改定位/digest 跨时区/gate 四组退出码/受限 TOML 六种非法形态 ✅ M5 | ✅ M0–M5（快层 255 passed × 双解释器；慢层 1 passed） |
 
 ## 里程碑
 
@@ -118,7 +127,7 @@
 | M2 | fidelity | `fidelity scan` 可用；**12 个 fixture 的 payload 与 golden 逐项一致**；同机双跑逐字节一致；octopus 与 custom_driver 均 `SKIPPED` 且退出码 0；`bench/fidelity.json` | ✅ 已完成（2026-10-18） |
 | M3 | parity | `parity` 可用；**6 个 fixture 的双向结果与 golden 逐项一致**；三态齐全且 `basis` 必填；`-U0` 跨行号/空白等价（`basis=patchid`）；临时 worktree 成功/异常两路径均无残留；`bench/parity.json` | ✅ 已完成（2026-10-18） |
 | M4 | ledger | `ledger` 可用；**三种 revert 状态识别正确且与 golden 逐项一致**；反向 patch-id 校验；`--find-object` 只作候选筛选、结论以 patch-id 为准；`REVERT_UNVERIFIED` 与"无 successor"分开输出；`bench/ledger.json` | ✅ 已完成（2026-10-19） |
-| M5 | report / gate | 规范 JSON + `--verify`；两台机器 digest 一致；`gate` 四组退出码语义全对；`audit-baseline.toml` 样例与 CI 示例落地 | ⬜ |
+| M5 | report / gate | 规范 JSON + `--verify`；跨时区/quotepath digest 一致；`gate` 四组退出码语义全对；`audit-baseline.toml` 与 `docs/report-sample.json` 样例落地；CI 新增两个冒烟 step | ✅ 已完成（2026-10-19） |
 | M6 | 发布 | 干净环境按 README 跑通三场景；脱敏四步；tag + Release 附件；`plan/RELEASE-M6.md` 两栏留档 | ⬜ |
 
 ## 承诺-证据台账使用说明

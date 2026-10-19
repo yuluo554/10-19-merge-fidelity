@@ -69,3 +69,45 @@ jobs:
           set -e
           test "$code" = "0"
           python -c "import json;d=json.load(open('ledger-report.json'));assert d['counts']=={'no_successor':0,'then_redone':1,'unverified':0}, d"
+
+      - name: "CLI smoke (report digest + --verify on generated fixtures)"
+        shell: bash
+        run: |
+          set +e
+          mergefidelity report data/fixtures/fidelity/smuggle-extra-line/repo \
+            --out report-out.json
+          code=$?
+          set -e
+          test "$code" = "0"
+          mergefidelity report data/fixtures/fidelity/smuggle-extra-line/repo \
+            --verify report-out.json > verified.txt
+          grep -q "verified:" verified.txt
+          python -c "import json;d=json.load(open('report-out.json'));assert d['parity'] is None and 'parity_not_requested' in d['notes'], d"
+
+      - name: "CLI smoke (gate four exit-code semantics)"
+        shell: bash
+        run: |
+          set +e
+          mergefidelity gate data/fixtures/fidelity/smuggle-extra-line/repo \
+            --baseline audit-baseline.toml > gate-report.json
+          code=$?
+          set -e
+          test "$code" = "0"
+          python -c "import json;d=json.load(open('gate-report.json'));assert d['counts']=={'baselined':1,'expired':0,'new':0,'stale':0}, d"
+          # 把 expires 改到过去 → 退出码 1 且 expired=1
+          sed 's/2099-12-31/2000-01-01/' audit-baseline.toml > expired-baseline.toml
+          set +e
+          mergefidelity gate data/fixtures/fidelity/smuggle-extra-line/repo \
+            --baseline expired-baseline.toml > /dev/null
+          code=$?
+          set -e
+          test "$code" = "1"
+          # 坏基线（数组形态）→ 退出码 2 + 行号
+          printf '[[finding]]\nid = "x"\nexpires = ["2099-12-31"]\njustification = "j"\n' > bad-baseline.toml
+          set +e
+          mergefidelity gate data/fixtures/fidelity/smuggle-extra-line/repo \
+            --baseline bad-baseline.toml 2> bad-baseline.err
+          code=$?
+          set -e
+          test "$code" = "2"
+          grep -q "toml_unsupported" bad-baseline.err

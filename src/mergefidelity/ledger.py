@@ -34,7 +34,7 @@ import re
 from . import __version__
 from . import canonical, gitobj
 from .errors import EXIT_OK, UsageError
-from .fidelity import validate_range_spec
+from .fidelity import range_end, validate_as_of, validate_range_spec
 
 MODULE = "ledger"
 
@@ -216,7 +216,7 @@ def ledger_scan(repo, *, range_spec=None, as_of=None):
     # 先拦"用户输入解不出来的引用"（用法错误 2），再谈环境（3）
     validate_range_spec(repo, range_spec)
     # 报告头指纹取范围的右端（与 fidelity 的 end_rev 同口径）；无范围则 HEAD
-    end_rev = _range_end(range_spec)
+    end_rev = range_end(range_spec)
 
     unavailable = []
     entries = []
@@ -230,7 +230,7 @@ def ledger_scan(repo, *, range_spec=None, as_of=None):
     if as_of is None:
         as_of = _default_as_of(repo, entries)
     else:
-        _validate_as_of(as_of)
+        validate_as_of(as_of)
 
     return {
         "tool_version": __version__,
@@ -251,22 +251,6 @@ def ledger_scan(repo, *, range_spec=None, as_of=None):
     }
 
 
-def _range_end(range_spec):
-    """报告头指纹用的"范围右端"：`A..B` → `B`；单个 REV → 它自己；无范围 → `HEAD`。
-
-    与 `fidelity` 的 `end_rev` 同口径——`.gitattributes` 会改变 merge driver 的判定，
-    因此它的 blob OID 必须进报告头；取范围右端而不是恒取 HEAD，才能让"扫历史某个区间"
-    的报告也如实反映**那个时点**的 attributes。
-    """
-    if not range_spec:
-        return "HEAD"
-    separator = "..." if "..." in range_spec else ".."
-    if separator not in range_spec:
-        return range_spec
-    _left, _, right = range_spec.partition(separator)
-    return right or "HEAD"
-
-
 def _default_as_of(repo, entries):
     """账本内最新提交时间的 UTC 日期（**不读系统时钟**，因此可逐字节复现）。"""
     stamps = []
@@ -282,11 +266,28 @@ def _default_as_of(repo, entries):
     return moment.strftime("%Y-%m-%d")
 
 
-def _validate_as_of(value):
-    try:
-        datetime.datetime.strptime(value, "%Y-%m-%d")
-    except (TypeError, ValueError):
-        raise UsageError("--as-of 必须是 YYYY-MM-DD：%r" % (value,))
+# --------------------------------------------------------------------------- findings
+
+def findings_of(report):
+    """把账本条目展开成**内容寻址 finding** 列表（`report`/`gate` 共用）。
+
+    revert 账目没有 diff 区间，`old_range` / `new_range` 按 §4.5 的"无对应侧"写 `-`；
+    参与 ID 的是 `(revert_oid, path, "-", "-", status)`。同一条 revert 的每个路径各一行。
+    """
+    items = []
+    for entry in report["entries"]:
+        for path in entry["paths"]:
+            items.append({
+                "id": canonical.finding_id(entry["revert_oid"], path, "-", "-",
+                                           entry["status"]),
+                "kind": entry["status"],
+                "commit_oid": entry["revert_oid"],
+                "commit_time": entry["reverted_commit_time"],
+                "path": path,
+                "old_range": "-",
+                "new_range": "-",
+            })
+    return items
 
 
 # --------------------------------------------------------------------------- 渲染

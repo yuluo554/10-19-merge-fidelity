@@ -64,17 +64,19 @@ def test_fidelity_without_action_returns_usage(capsys):
     assert "scan" in captured.err
 
 
-@pytest.mark.parametrize("args,module", [
-    (["report", "."], "report"),
-    (["gate", ".", "--baseline", "b.toml"], "gate"),
+@pytest.mark.parametrize("args,module,needle", [
+    (["report", ".", "--verify", "no-such-report.json"], "report", "无法读取报告文件"),
+    (["gate", ".", "--baseline", "no-such-baseline.toml"], "gate", "无法读取基线文件"),
 ])
-def test_not_ready_modules_return_usage_with_chinese_hint(args, module, capsys):
-    """骨架期：未实现模块必须以退出码 2 + 明确提示收场，绝不输出伪造空 JSON。"""
+def test_bad_input_files_return_usage_with_chinese_hint(args, module, needle, capsys):
+    """坏输入文件必须以退出码 2 + 中文提示收场，绝不输出伪造空 JSON。
+
+    （骨架期的"尚未实现"提示已随 M5 落地退役；这里守的是**输入类错误仍归 2**。）
+    """
     code = cli.main(args)
     captured = capsys.readouterr()
     assert code == EXIT_USAGE
-    assert module in captured.err
-    assert "尚未实现" in captured.err
+    assert needle in captured.err
     assert captured.out == ""
 
 

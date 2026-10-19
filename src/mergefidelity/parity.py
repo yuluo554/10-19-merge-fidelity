@@ -26,7 +26,7 @@ import datetime
 from . import __version__
 from . import canonical, diffparse, gitobj
 from .errors import EXIT_OK, UsageError
-from .fidelity import require_ref
+from .fidelity import require_ref, validate_as_of
 
 MODULE = "parity"
 
@@ -176,7 +176,7 @@ def parity_scan(repo, from_ref, to_ref, *, apply_fallback=True, as_of=None):
     if as_of is None:
         as_of = _default_as_of(repo, from_oid, to_oid)
     else:
-        _validate_as_of(as_of)
+        validate_as_of(as_of)
 
     warnings = _crosscheck(repo, from_ref, to_ref, len(candidates))
 
@@ -231,11 +231,38 @@ def _default_as_of(repo, *oids):
     return moment.strftime("%Y-%m-%d")
 
 
-def _validate_as_of(value):
-    try:
-        datetime.datetime.strptime(value, "%Y-%m-%d")
-    except (TypeError, ValueError):
-        raise UsageError("--as-of 必须是 YYYY-MM-DD：%r" % (value,))
+# --------------------------------------------------------------------------- findings
+
+PARITY_KINDS = {STATUS_MISSING: "PARITY_MISSING", STATUS_MODIFIED: "PARITY_MODIFIED"}
+
+
+def findings_of(report, *, repo=None):
+    """把判为**缺失/改写**的候选展开成内容寻址 finding 列表（`report`/`gate` 共用）。
+
+    口径见 `data/README.md` §4.5：`kind` 取 `PARITY_MISSING` / `PARITY_MODIFIED`
+    （"跨分支漏搬"的两种形态）；候选提交没有单一区间含义，`old_range` / `new_range`
+    按"无对应侧"写 `-`，路径逐个展开。`PRESENT` 不是事故，不入账。
+
+    `commit_time` 需要对象库（`repo`）；未给时记 0——排序仍由 `commit_oid` 兜底，
+    且 `commit_time` **不参与 finding ID**，因此缺省不影响 ID 的可复算性。
+    """
+    items = []
+    for row in report["commits"]:
+        kind = PARITY_KINDS.get(row["status"])
+        if kind is None:
+            continue
+        stamp = gitobj.commit_time(repo, row["commit"]) if repo else 0
+        for path in row["paths"]:
+            items.append({
+                "id": canonical.finding_id(row["commit"], path, "-", "-", kind),
+                "kind": kind,
+                "commit_oid": row["commit"],
+                "commit_time": stamp,
+                "path": path,
+                "old_range": "-",
+                "new_range": "-",
+            })
+    return items
 
 
 # --------------------------------------------------------------------------- 渲染

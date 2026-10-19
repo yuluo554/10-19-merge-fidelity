@@ -154,31 +154,40 @@ def test_every_registered_subcommand_has_a_dispatch_path():
         assert name in cli._DISPATCH
 
 
-def test_skeleton_not_ready_registry_is_explicit():
-    """骨架态登记：这些模块当前抛 NotReadyError；每落地一个就同轮删一行。"""
-    from mergefidelity import gate, report
-    from mergefidelity.errors import NotReadyError
+def test_skeleton_not_ready_registry_is_now_empty():
+    """骨架态登记已清空：M5 起五个子命令全部落地，没有任何模块再抛 `NotReadyError`。
 
-    modules = {
-        "report": report.run,
-        "gate": gate.run,
-    }
-    for name, func in modules.items():
-        with pytest.raises(NotReadyError) as excinfo:
-            func(_Args())
-        assert excinfo.value.module == name
-        assert excinfo.value.exit_code == 2
+    本测试是"骨架退役"的**空集守门**：只要有一个模块悄悄退回占位实现（抛
+    `NotReadyError` 或 `NotImplementedError`），它就变红。
+    """
+    from mergefidelity import errors
+
+    assert not hasattr(errors, "NotReadyError"), "骨架期异常已退役，不得复活"
+    offenders = {}
+    for name in sorted(os.listdir(os.path.join(SRC, "mergefidelity"))):
+        if not name.endswith(".py") or name == "errors.py":
+            continue
+        text = _read(os.path.join(SRC, "mergefidelity", name))
+        for marker in ("NotReadyError", "NotImplementedError", "TODO"):
+            if marker in text:
+                offenders.setdefault(name, []).append(marker)
+    assert not offenders, "模块里仍有占位实现标记：%r" % offenders
 
 
-class _Args(object):
-    def __getattr__(self, item):
-        return None
+def test_every_subcommand_is_implemented_not_a_stub():
+    """每个子命令的 `run` 都真的会执行（不是抛占位异常的壳）。"""
+    from mergefidelity import cli, fidelity
+
+    handlers = dict(cli._DISPATCH)
+    handlers["fidelity"] = fidelity.run
+    for name in cli.SUBCOMMANDS:
+        assert callable(handlers[name]), name
 
 
 def test_no_shared_layer_raises_not_ready():
     """共享层（gitobj/canonical/diffparse/cli/errors）不得有"未实现"占位。"""
-    for name in ("cli.py", "canonical.py", "diffparse.py", "gitobj.py", "errors.py"):
+    for name in ("cli.py", "canonical.py", "diffparse.py", "gitobj.py"):
         text = _read(os.path.join(SRC, "mergefidelity", name))
-        assert "NotReadyError(" not in text or name == "errors.py", name
+        assert "NotReadyError" not in text, name
         assert "NotImplementedError" not in text, name
         assert "TODO" not in text, name

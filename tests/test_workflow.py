@@ -52,6 +52,8 @@ def test_workflow_steps_are_named_and_counted():
         "CLI smoke (fidelity on generated fixtures)",
         "CLI smoke (parity on generated fixtures)",
         "CLI smoke (ledger on generated fixtures)",
+        "CLI smoke (report digest + --verify on generated fixtures)",
+        "CLI smoke (gate four exit-code semantics)",
     ]
     names = [step.get("name") for step in steps]
     assert names == expected, "step 数量/顺序变化须同步本断言与 README"
@@ -66,6 +68,10 @@ def test_workflow_uses_readme_install_path_and_bare_console_script():
     assert "python -m mergefidelity --version" in joined, "module 形态也要冒烟"
     assert "mergefidelity parity " in joined, "parity 冒烟（三态矩阵）必须存在"
     assert "mergefidelity ledger " in joined, "ledger 冒烟（revert 三状态）必须存在"
+    assert "mergefidelity report " in joined, "report 冒烟（digest + --verify）必须存在"
+    assert "--verify report-out.json" in joined, "--verify 逐字节复算必须被冒烟"
+    assert "mergefidelity gate " in joined, "gate 冒烟（四组退出码）必须存在"
+    assert "audit-baseline.toml" in joined, "gate 冒烟必须用入仓的基线样例"
 
 
 def test_workflow_sets_utf8_env():

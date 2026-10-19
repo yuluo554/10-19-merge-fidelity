@@ -24,13 +24,11 @@
 | M2 | `fidelity scan`：机械树复算 + `blob_fidelity` + 三类 hunk（12/12 fixture 与 golden 逐项一致） | ✅ 已完成 |
 | M3 | `parity`：跨分支三态（`-U0` patch-id + apply 兜底）；6 个 fixture 双向与 golden 逐项一致 | ✅ 已完成 |
 | M4 | `ledger`：revert / 复活账本（反向 patch-id 校验 + `--find-object` 重放）；3 个 fixture 与 golden 逐项一致 | ✅ 已完成 |
-| M5 | `report`（digest + `--verify`）/ `gate`（过期基线门禁） | ⬜ 未开工 |
+| M5 | `report`（规范 JSON + digest + `--verify`）/ `gate`（受限 TOML 基线 + 四组退出码） | ✅ 已完成 |
 | M6 | 发布：公开仓库 + v0.1.0 tag + Release 附件 | ⬜ 未开工 |
 
-> `fidelity`、`parity`、`ledger` 已可用；`report` / `gate` **已注册并可 `--help`**，但尚未实现的
-> 模块以**退出码 2 + 中文提示**收场，**不输出伪造的空结果**（每个模块落地时同轮退役该提示）。
->
-> 开发进度与逐项证据见 `plan/00-README总览.md`（承诺-证据台账 + 里程碑表）与各 `plan/HANDOFF-*.md`。
+> 五个子命令全部可用（M5 起没有"骨架态"模块）。开发进度与逐项证据见
+> `plan/00-README总览.md`（承诺-证据台账 + 里程碑表）与各 `plan/HANDOFF-*.md`。
 
 ## 安装
 
@@ -44,7 +42,8 @@ Windows 上 `python` 可能是应用商店占位符，用 `py -3.8` / `py -3.12`
 
 ## 用法（最小复现命令）
 
-> `fidelity`、`parity`、`ledger` 已按下列形态可用；`gate` 的参数契约自 M0 起固定，功能里程碑落地后即可用。
+> 五个子命令均已可用。下面三条是最小复现通路；`docs/report-sample.json` 与
+> `audit-baseline.toml` 是入仓的样例产物（对合成 fixture 生效，可 `--verify` 复算）。
 
 ```bash
 # 场景一：扫描一个仓库的全部 merge，看有哪些夹带/吞掉
@@ -59,11 +58,15 @@ mergefidelity parity /path/to/repo --from=release/1.0 --to=main --no-apply-fallb
 mergefidelity gate /path/to/repo --since=v0.1.0 --baseline=audit-baseline.toml --fail-on=smuggled
 ```
 
-Revert / 复活账本同样一条命令：
+Revert / 复活账本与确定性报告同样一条命令：
 
 ```bash
 mergefidelity ledger /path/to/repo                 # 记账全部 revert，判它们是被回滚后重做还是静默消失
 mergefidelity ledger /path/to/repo --range=v1.0..v1.1   # 只看某个范围内的 revert
+
+mergefidelity report /path/to/repo --out report.json          # 规范 JSON + digest
+mergefidelity report /path/to/repo --verify report.json       # 同一对象库重推、逐字节复算
+mergefidelity report /path/to/repo --parity-from=release/1.0 --parity-to=main   # 附带跨分支对齐
 ```
 
 ## 退出码
@@ -81,9 +84,9 @@ mergefidelity ledger /path/to/repo --range=v1.0..v1.1   # 只看某个范围内�
 
 | 字段 | 说明 |
 |---|---|
-| `git_version` / `object_format` / `gitattributes_oid` | 环境指纹：git 版本、对象格式（sha1/sha256）、`.gitattributes` blob OID |
+| `git_version` / `object_format` / `gitattributes_oid` | 环境指纹：git 版本、对象格式（sha1/sha256）、`.gitattributes` blob OID（取**范围右端**那个时点） |
 | `config_overrides` | 生效的 `-c` 覆盖项（固定注入，参与 digest） |
-| `range` / `as_of` | 扫描范围与日期（`as_of` 显式给出，**不读系统时钟**） |
+| `range` / `as_of` | 扫描范围与日期（`as_of` 显式给出或取自提交时间，**不读系统时钟**） |
 | `merges[*].mechanical_tree` / `recorded_tree` | 机械合并复算的树 vs 实际记录的树 |
 | `merges[*].blob_fidelity` | `|{path: recorded_oid == mechanical_oid}| / |{path}|`，分母为 0 时记 `null` |
 | `merges[*].hunks[*].kind` | `SMUGGLED` / `DROPPED` / `RESOLUTION` |
@@ -115,6 +118,28 @@ mergefidelity ledger /path/to/repo --range=v1.0..v1.1   # 只看某个范围内�
 | `entries[*].successor_oid` | 复活该改动的提交（`-U0` patch-id 与原始相等）；无则 `null` |
 | `counts` | `{no_successor, then_redone, unverified}` |
 | `unavailable[*]` | 能力缺失（如 `--find-object` 需 git ≥2.16）：`{"reason":"git_too_old","capability":"find-object"}`——此时**不降级猜** successor。两种 `REVERT_UNVERIFIED` 靠它区分：非空 = 重放判不了（`verified` 仍可为 `true`）；为空 = 正文声称的回滚与实际 diff 对不上 |
+
+`report` 报告（`mergefidelity report`，样例 `docs/report-sample.json`）另含：
+
+| 字段 | 说明 |
+|---|---|
+| `findings_digest_algorithm` | 固定 `"sha256"`；写进报告头并参与 digest |
+| `findings[*]` | 把 `fidelity` 的 hunk 与 `ledger`/`parity` 的条目统一成内容寻址 finding：`id` / `kind` / `commit_oid` / `commit_time` / `path` / `old_range` / `new_range`；按 `(commit_time, commit_oid, path, old_range)` 排序 |
+| `fidelity` / `ledger` / `parity` | 三个模块的**原始报告**（原样嵌入，不裁剪）；`parity` 未请求时为 `null` |
+| `parity_requested` / `notes` | 是否给了 `--parity-from/--parity-to`；未请求时 `notes` 写 `parity_not_requested`（**不伪造空结果**） |
+| `--verify=PATH` | 读回报告 → 用**同一对象库**重推 → 逐字节比较；有差异 → 退出码 1 + `{"json_path","expected","actual"}`；缺 `digest` / 坏 JSON → 退出码 2；一致 → 0 并打 `verified: N merges, M findings` |
+
+`gate` 报告（`mergefidelity gate <repo> --baseline=audit-baseline.toml`）另含：
+
+| 字段 | 说明 |
+|---|---|
+| `baseline_entries` / `fail_on` | 基线条目数与本次 `--fail-on` 口径 |
+| `counts` | `{baselined, expired, new, stale}` 四类计数 |
+| `baselined[*]` | 命中基线且 `as_of <= expires`——不计失败（含 `finding` / `expires` / `justification`） |
+| `expired[*]` | 命中基线但已过期——**参与失败**（旧账自动重新报警） |
+| `new[*]` | 未命中基线的新增 finding，按 `--fail-on` 过滤 kind——参与失败 |
+| `stale[*]` | 基线里指向本次扫描不存在的 finding（已修复/已删除）——**只提示，不失败** |
+| 退出码 | `new` 或 `expired` 非空 → 1；否则 0；基线/用法坏 → 2；环境不满足 → 3 |
 
 ## 已知边界（如实标注）
 
@@ -149,6 +174,20 @@ mergefidelity ledger /path/to/repo --range=v1.0..v1.1   # 只看某个范围内�
   是否被重做判不了"，与"正文对不上"是两回事）。
 - 临时 worktree 只用于 `parity` 的 apply 兜底，落在系统临时目录，每次调用只创建一次，
   成功/异常两条路径都清理。
+- **`report` 不写扫描时刻、绝对路径、主机名、用户名、locale、Python 版本**：报告头只有
+  `tool_version` / `git_version` / `object_format` / `gitattributes_oid` / `config_overrides` /
+  `range` / `as_of` / `findings_digest_algorithm`。换时区（`TZ`）与 `core.quotepath` 不改变 digest；
+  `as_of` 取自提交时间，因此同一 fixture 在任何机器上重算同一 digest。
+- **`report --verify` 的定位顺序是"先内容、后 digest"**：任何内容篡改都会被逐字节比较先抓住，
+  `json_path` 落在**被改的那个字段**（如 `fidelity.merges[0].hunks[0].new_range`）；
+  只改了 `digest` 自身才定位到 `digest`。先查 digest 会把"哪一处被改了"这个真正有用的答案盖掉。
+- **`gate` 的基线是受限 TOML 子集**（Python 3.8 无 `tomllib`）：只支持 `[[finding]]` +
+  字符串值 + 注释；数组 / 嵌套表 / 多行字符串 / 非字符串值 → `toml_unsupported`（退出码 2，**明示行号**）；
+  语法错误 / 缺 `justification` / 坏日期 → 退出码 2 且**零副作用**（不写任何产物）。
+  `id` 精确匹配，不做前缀/模糊匹配；`expires` 按报告内 `as_of` 比较，**不读系统时钟**；
+  `as_of <= expires` 算未过期（边界当天仍不失败）。
+- **`gate` 全量收集 `SMUGGLED` 与 `DROPPED`**，`--fail-on` 只过滤 **`new`**（新增）是否参与失败：
+  `baselined` / `expired` 必须覆盖全部事故类，否则另一类的基线条目会凭空变成 `stale`（假"已修复"）。
 
 ## 开发
 
