@@ -32,10 +32,15 @@
 | 共享层口径收敛 | ✅ | `fidelity.range_end`（取代 `ledger._range_end`）、`fidelity.validate_as_of`（取代 `ledger`/`parity` 的 `_validate_as_of`） |
 | CI 接线 | ✅ | 新增 2 step：`CLI smoke (report digest + --verify on generated fixtures)`、`CLI smoke (gate four exit-code semantics)`；workflow 本地 `yaml.safe_load` 通过（**11 step**） |
 | 基准 | ✅ | `bench/gate.json`：12 个 fixture 的完整门禁路径耗时 + 基线命中数/四类计数 |
-| 测试规模 | ✅ | 快层 **257 passed** ×（3.8 / 3.12）；慢层（`--check` 重生成 21 个仓库）1 passed |
+| 测试规模 | ✅ | 快层 **257 passed** ×（3.8 / 3.12）；慢层（`--check` 重生成 21 个仓库）1 passed（M6 新增 1 条测试后为 258） |
 
 **本地等价校验（未接远端，CI 待首推验证）**：双解释器快层、3.8 慢层、workflow 本地解析、report `--verify` 与 gate 四组退出码 CLI 冒烟、样例产物复算。
 **不可本机实跑**：Linux/macOS 上 `git log --find-object` / `worktree` / `merge-tree` 行为差异（首份跨平台证据仍由 CI 首推给出）。
+
+> **M6 已补齐跨平台证据**：CI 首推后，ubuntu-22.04（git 2.55.0）与 windows-latest（git 2.56.0.windows.2）
+> 两个平台 × py3.8/3.12 四 job 全绿（run `39218760801` 等）。注意 `git_version` 因此成为
+> **跨机天然不同的环境指纹**——`report --verify` 对"别的机器生成的报告"会命中 `fidelity.git_version`，
+> 这是设计如此（`data/README.md` §4.6），不是篡改（见 §2.6 缺陷 3）。
 
 ## 2. 下一棒待办（M6 = 发布）
 
@@ -167,9 +172,10 @@ tag `v0.1.0` / Release 标题。**当前是 `0.1.0.dev0`，发布前统一改成
 - [x] `docs/report-sample.json` + `audit-baseline.toml` 入仓且被测试复算（`--verify` 通过）
 - [x] `tools/bench_gate.py` → `bench/gate.json`（完整门禁路径耗时 + 基线命中数）
 - [x] 骨架态退役三处同步（代码 + 登记测试 + CLI 参数）；`errors.NotReadyError` 已删
-- [x] CI 新增 report/gate 冒烟（含 `--verify` 与 gate 四组退出码），workflow 本地解析通过（11 step）
-- [x] 双解释器快层 257 passed；3.8 慢层 1 passed
-- [ ] **CI 绿** —— 未接远端，**写"本地等价校验（待首推验证）"**，M6 首推后据实补记 run id
+- [x] CI 新增 report/gate 冒烟（含 `--verify` 与 gate 四组退出码），workflow 本地解析通过（M6 后为 **12 step**）
+- [x] 双解释器快层 258 passed；3.8 慢层 1 passed
+- [x] **CI 绿** —— M6 已接远端；最终 run `39218760801`（commit `eb1c4e6`）四 job 全绿；
+      发布包内 `pytest` 258 passed / 1 skipped（证据见 `plan/RELEASE-M6.md` §3.3）
 
 ## 6. 关键命令速查
 
