@@ -66,29 +66,33 @@
 
 | 项 | 值 |
 |---|---|
-| tag（annotated 对象） | `097ae82`（`git rev-parse v0.1.0`） |
-| tag 指向的 commit | `f23438e`（`git rev-parse v0.1.0^{commit}`） |
+| tag（annotated 对象） | `7f82fac`（`git rev-parse v0.1.0`） |
+| tag 指向的 commit | `33e1ca4`（`git rev-parse v0.1.0^{commit}`） |
 | Release URL | <https://github.com/yuluo554/10-19-merge-fidelity/releases/tag/v0.1.0> |
 | Release 状态 | 非草稿、非预发布（`isDraft=false`、`isPrerelease=false`） |
-| 源码包名 | `mergefidelity-0.1.0.tar.gz`（190213 字节） |
-| 源码包 sha256 | `b8f3e411c4c0f00301d1f22900804c23fc674cbb41dfae222993dbcee6abb435` |
+| 源码包名 | `mergefidelity-0.1.0.tar.gz`（194710 字节） |
+| 源码包 sha256 | `ef8e9d1659a6f367b78767f410bb547e7cf310ce7908076710e30f9429c3f55e` |
 | `SHA256SUMS` 附件 | 同上一行（93 字节，`sha256sum -c` 通过） |
 | 构建可复现性 | 3 次 `git archive v0.1.0 \| gzip -9n` 逐字节一致（`cmp` 通过） |
 | CI run（首推，修复 3 缺陷） | `39197159675`（红）→ `39199785754`（绿，commit `cc00c47`） |
 | CI run（文档收尾） | `39202465908`（绿，commit `fbb0ab6`） |
 | CI run（修第 4 缺陷） | `39205421988`（绿，commit `d9ea34a`） |
-| CI run（最终发布提交） | `39206716739`（**绿**，commit `f23438e`，四 job 全绿） |
+| CI run（修第 5/6 缺陷） | `39212350631`（绿，commit `55dfea9`） |
+| CI run（**最终发布提交**） | `39214226318`（**绿**，commit `33e1ca4`，四 job 全绿） |
 
 ### 3.1 tag 移动记录（如实留档）
 
 | 时点 | tag → commit | 源码包 sha256 | 原因 |
 |---|---|---|---|
 | 首次发布 | `e6ddce8` → `fbb0ab6` | `a064e105…` | 按当时 CI 绿（`39202465908`）发布 |
-| 修正后重发 | `097ae82` → `f23438e` | `b8f3e411…` | **发布包实测**发现 README 场景一的 `--show-kind=smuggled,dropped` 退出码 2（缺陷 4）；修复提交 `d9ea34a` 后 CI 绿（`39206716739`），tag 移到含修复与留档的 `f23438e`，附件重建并覆盖 |
+| 第 1 次修正 | `097ae82` → `f23438e` | `b8f3e411…` | **发布包实测**发现 README 场景一的 `--show-kind=smuggled,dropped` 退出码 2（缺陷 4）；修复提交 `d9ea34a` 后 CI 绿（`39206716739`），tag 移至 `f23438e` |
+| 第 2 次修正 | `3f6ca2c` → `55dfea9` | `662679f2…` | 继续在发布包里按 README 跑 `pytest`，又发现缺陷 5/6（无 `.git` 时 `git ls-files` 128、慢层 `--check` 冻结仓库不存在）；修复后 CI 绿（`39212350631`），tag 移至 `55dfea9` |
+| 第 3 次修正（定稿） | `7f82fac` → `33e1ca4` | `ef8e9d16…` | 发布包实测发现 README 未说明"合成仓库需先生成"（按文档直接跑场景 → 退出码 3）；补齐前置命令与"开发"说明后 CI 绿（`39214226318`），tag 定为 `33e1ca4` |
 
-**为什么允许移动**：`v0.1.0` 发布仅数分钟、无真实下游（附件下载数 1，是本轮自校验），
-而留在原 tag 会直接违反 M6 的 DoD（"干净 clone 按 README 跑通三场景"）。
-这是一个**刻意的取舍**，不是疏漏；若将来已有人依赖该 tag，则应按"另发 v0.1.1"处理而非移动。
+**为什么允许移动**：`v0.1.0` 发布仅数十分钟、无真实下游（附件下载数均为本轮自校验），
+而留在任一旧 tag 都会直接违反 M6 的 DoD（"干净 clone 按 README 跑通三场景"）。
+这是**刻意的取舍**，不是疏漏；若将来已有人依赖该 tag，则应按"另发 v0.1.1"处理而非移动。
+每一轮移动都重建附件、重写 Release 正文，并把旧 sha256 留在本表——不掩盖历史。
 
 ### 3.2 发布后干净环境实测（最终附件）
 
@@ -104,6 +108,8 @@
 | `ledger`（含 `--range`） | rc=0 / rc=0 |
 | `report --out` → `report --verify` | rc=0，`verified: 1 merges, 1 findings` |
 | `report --verify docs/report-sample.json` | rc=0，`verified: 1 merges, 1 findings` |
+| 发布包内 `pytest -q` | **258 passed, 1 skipped**（skip = 无 `.git`，忽略规则生效与否不可判） |
+| README 代码块内全部命令 | 12 条**全部可被当前 parser 解析**（脚本逐条 `parse_args` 复验） |
 
 ## 四、M6 抓出的真缺陷（CI 首推 + 发布包实测）
 
