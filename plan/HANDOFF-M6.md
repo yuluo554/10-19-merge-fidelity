@@ -10,7 +10,7 @@
 | `report` 实现 | ✅ | `src/mergefidelity/report.py`：`build_report`（三模块同对象库现跑一次）→ `findings` 三源合一 → 规范 JSON + digest；`--verify` 先内容后 digest 定位；坏 JSON/缺 `digest` → 退出码 2 |
 | `findings` 三源合一 | ✅ | `fidelity.findings_of`（hunk）/ `parity.findings_of`（`PARITY_MISSING`/`PARITY_MODIFIED`）/ `ledger.findings_of`（`REVERTED_*`）；字段恰 7 项；排序 `(commit_time, commit_oid, path, old_range)` |
 | 内容寻址 ID 独立复算 | ✅ | `test_report.py::test_findings_ids_are_content_addressed`：每条 finding 的 `id` 与 `canonical.finding_id` 手算一致 |
-| digest 跨时区一致 | ✅ | `TZ=America/New_York` vs `TZ=Asia/Shanghai` 下同 digest（实测 `1ff58a3c7f4cd8146886f6a8112c1f43e3ff118b5208f7286743a671df695ab2`） |
+| digest 跨时区一致 | ✅ | `TZ=America/New_York` vs `TZ=Asia/Shanghai` 下同 digest（M5 实测 `1ff58a3c7f4cd8146886f6a8112c1f43e3ff118b5208f7286743a671df695ab2`；v0.1.0 版本号一变，digest 同步改为 `eb65704e058fbdcfeb9226be00b974963b8b780fb5720432a3aa13a774b383f4`） |
 | digest 对 `core.quotepath` 免疫 | ✅ | 报告头字段在 `core.quotepath=true/false` 下不变（路径经 `-z` 原样读出）；变异验证：去掉 `-z` → 测试变红 |
 | 报告头禁止字段 | ✅ | 断言无绝对路径 / `python_version` / `scan_time` / `hostname` / `locale`；`as_of` 取自提交时间（`2026-01-01`） |
 | **`as_of` 回落口径（实测抓出的回归）** | ✅ | 初版空输入（无 merge、无 revert）落成 `1970-01-01`，与同一仓库的 `fidelity`/`ledger` 不一致。定案：取**三源 `as_of` 的最大值**，空仓库无提交才回落 `end_rev`。复现 `test_report.py::test_as_of_falls_back_to_head_on_empty_input`；变异验证：去掉回落 → 该测试变红 |
@@ -39,12 +39,13 @@
 
 ### 2.1 脱敏四步（发布前必做，逐条可复核）
 
-1. **文本 0 命中**：本机用户名（`ASUS`）、家目录（`C:\Users\ASUS`）、盘符绝对路径、非 noreply 邮箱。
+1. **文本 0 命中**：本机用户名、家目录、盘符绝对路径、非 noreply 邮箱。
    - 已知风险点：`plan/HANDOFF-*.md` 与 `plan/AUDIT-*.md` 里的实测命令、`data/README.md` 的检索记录。
-   - 复核命令（仓库内搜，命中即改）：
+   - 复核命令（仓库内搜，命中即改；本机用户名用变量取，命令本身不入仓）：
      ```bash
-     git grep -n -I -e "C:\\\\" -e "/Users/" -e "ASUS" -- . ':!data/fixtures'
-     git grep -n -I -E "[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}" -- . ':!data/fixtures'
+     U="$(git config user.name)"     # 本机用户名，不写进文件
+     git grep -n -I -e 'C:\\' -e '/Users/' -e "$U" -- . ':!data/fixtures'
+     git grep -n -I -E '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}' -- . ':!data/fixtures'
      ```
 2. **产物脱敏**：`bench/*.json` 里只应有 fixture 名（无绝对路径）；`docs/report-sample.json` 已断言无绝对路径。
 3. **git 历史脱敏**：`git log --format=%an <%ae>` 全列必须是 `yuluo554 <282769740+yuluo554@users.noreply.github.com>`（本机身份已是该值，M0 时确认过）。

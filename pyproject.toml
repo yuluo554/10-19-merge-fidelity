@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mergefidelity"
-version = "0.1.0.dev0"
+version = "0.1.0"
 description = "Merge 保真度审计：用 git 自己的合并引擎复算机械合并，逐 blob 对比实际记录的树"
 readme = "README.md"
 requires-python = ">=3.8"
