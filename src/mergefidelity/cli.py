@@ -112,7 +112,7 @@ def build_parser():
     gat.add_argument("--baseline", metavar="PATH", required=True, help="基线文件（TOML）")
     gat.add_argument("--since", metavar="REV", default=None, help="只扫 REV.. 之后的增量")
     gat.add_argument("--fail-on", choices=("smuggled", "dropped", "any"), default="any",
-                     help="把哪些新增/过期 finding 计为失败")
+                     help="把哪些类别的**新增** finding 计为失败（基线内/过期条目不受此过滤）")
     _add_output_options(gat)
 
     return parser

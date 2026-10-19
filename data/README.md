@@ -166,8 +166,19 @@ Finding ID = sha1(merge_oid ‖ path ‖ old_range ‖ new_range ‖ kind)
 
 - 报告为规范 JSON：键按字典序、无多余空白、`ensure_ascii=false`、行尾 `\n`、文件编码 UTF-8（无 BOM）。
 - `digest = sha256(规范 JSON 去掉 digest 字段自身后的字节)`。
-- 报告头固定字段：`git_version`、`object_format`、`gitattributes_oid`（无则 `null`）、`config_overrides`（排序后的 `-c` 项）、`range`、`tool_version`。
+- 报告头固定字段（`report`）：`tool_version`、`git_version`、`object_format`、`gitattributes_oid`（无则 `null`）、`config_overrides`（排序后的 `-c` 项）、`range`、`as_of`、`findings_digest_algorithm`（固定 `"sha256"`）。
+  **禁止**出现在报告里的：扫描时刻、绝对路径、主机名、用户名、locale、Python 版本。
+  `gitattributes_oid` 取**范围右端**（`A..B`→`B`、单 REV→它自己、无范围→`HEAD`）——`.gitattributes`
+  会改变 merge driver 判定，指纹必须反映**被扫那个时点**。`as_of` 未显式给出时取三源 `as_of` 的最大值
+  （各源空输入都回落范围右端），**不读系统时钟**。
+- `findings[*].id` = 内容寻址 finding ID（§4.5），由三个模块各自展开（`findings_of`）后汇总：
+  `fidelity` 的 hunk（`SMUGGLED`/`DROPPED`/`RESOLUTION`）、`parity` 的 `PARITY_MISSING`/`PARITY_MODIFIED`
+  （`PRESENT` 不是事故，不入账）、`ledger` 的 `REVERTED_*`；按 `(commit_time, commit_oid, path, old_range)` 排序。
+  `parity` 未请求时该节为 `null` 且 `notes` 写 `parity_not_requested`（**不伪造空结果**）。
 - `--verify` = 用同一对象库重新推导全部 finding 与 digest，逐字节比较；不一致时以退出码 1 结束并输出首个差异（JSON path + 期望 + 实际）。
+  **定位顺序**：先与读回报告**去掉 `digest` 字段后**逐字节比较（差异定位到被改字段），内容一致再校验
+  `digest` 自身（定位到 `digest`）——否则任何内容篡改都会先命中 `digest`，把"哪一处被改了"盖掉。
+  坏 JSON / 缺 `digest` 字段 = 坏报告 → 退出码 2。
 
 ### 4.7 基线过期语义
 
@@ -180,10 +191,15 @@ expires = "YYYY-MM-DD"      # 必填，按报告内 as_of 日期比较
 justification = "非空字符串"  # 必填，缺省视为语法错误（退出码 2）
 ```
 
-- 命中基线且 `as_of <= expires` → 不计失败，计入 `baselined`。
+- 命中基线且 `as_of <= expires` → 不计失败，计入 `baselined`（**边界当天含在内**）。
 - 命中基线且 `as_of > expires` → 标记 `expired`，参与失败计数。
 - 基线条目的 `id` 在本次扫描中不存在 → 标记 `stale`，只提示，不计失败。
-- `id` 精确匹配，不做前缀/模糊匹配。
+- `id` 精确匹配，不做前缀/模糊匹配；同一 `id` 重复登记 → 语法错误。
+- **受限 TOML 子集**（Python 3.8 无 `tomllib`）：只支持 `[[finding]]` + 单行基本字符串 + 注释；
+  数组 / 嵌套表 / 多行字符串 / 内联表 / 非字符串值 / 未知键 → `toml_unsupported`（退出码 2，**明示行号**）；
+  空基线（等于没有门禁）→ 语法错误。
+- 门禁**全量收集 `SMUGGLED` + `DROPPED`**，`--fail-on` 只过滤**新增**（`new`）是否参与失败——
+  否则另一类已登记的旧账会因"没扫到"被误报成 `stale`（假"已修复"）。
 - 退出码：0 = 无新增且无过期；1 = 有新增或过期；2 = 用法/基线语法错误；3 = 环境不满足（git 版本低于门槛）。
 
 ### 4.8 版本门槛
