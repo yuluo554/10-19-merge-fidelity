@@ -1402,7 +1402,11 @@ def generate(root, only=None, suites=None):
     for suite, name in selected:
         records.append(build_one(suite, name, root))
 
-    if not only:
+    # `manifest.json` 只描述**全集**：部分生成（`--only` / `--suite`）时绝不改写它。
+    # 否则测试的 autouse fixture 用 `--suite fidelity` 现生成仓库，就会把入仓的
+    # manifest 覆盖成只剩 fidelity 的记录，与目录实际内容（21 个）不符——
+    # 这是实测抓出的真缺陷：一次普通 `pytest` 会静默改坏一个入仓文件。
+    if not only and not suites:
         manifest = {
             "generator_version": GENERATOR_VERSION,
             "git_min": "%d.%d" % GIT_MIN,

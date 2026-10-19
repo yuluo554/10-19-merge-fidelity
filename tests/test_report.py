@@ -330,9 +330,48 @@ def test_repo_report_sample_matches_current_tool(tmp_path):
 
     样例是对**同一个合成仓库**生成的报告；fixture 仓库可重建（OID 固定），
     因此样例不会随时间漂移。样例缺失时本测试自动跳过（发布前由 CI 断言存在）。
+
+    **CI 首推实测抓出的真缺陷（M6）**：报告头 `git_version` 参与 digest，而样例是
+    在**本机**（`2.54.0.windows.1`）生成的；CI runner 上是 `2.55.0` / `2.56.0.windows.2`，
+    于是 `--verify` 逐字节比较必然命中 `fidelity.git_version` 而退出码 1。
+    这不是"报告被篡改"，而是"环境指纹本来就会跨机器不同"——口径见
+    `data/README.md` §4.6：`git_version` 是**环境指纹**，跨机不同是**设计如此**。
+
+    因此本测试分两段，**既不放过真篡改、也不把环境指纹误判成篡改**：
+
+    1. 本机 `git_version` 与样例一致 → 直接要求 `--verify` 退出码 0（强断言）；
+    2. 不一致 → 要求差异**恰好只落在环境指纹字段**（`git_version`，三处同值），
+       其余内容（findings / merges / digest 重算）必须逐字节一致。
     """
     sample = os.path.join(ROOT, "docs", "report-sample.json")
     if not os.path.isfile(sample):
         pytest.skip("docs/report-sample.json 尚未生成")
+
     code = cli.main(["report", SMUGGLE_REPO, "--verify", sample])
-    assert code == 0
+    local_git_version = gitobj.require_version(SMUGGLE_REPO, gitobj.GIT_MIN_FIDELITY)
+    with io.open(sample, encoding="utf-8") as handle:
+        recorded_git_version = json.load(handle)["git_version"]
+
+    if recorded_git_version == local_git_version:
+        assert code == 0, "同机同 git 版本下样例必须 `--verify` 通过"
+        return
+
+    # 跨 git 版本：只允许环境指纹字段不同，且必须精确定位到它
+    path = str(tmp_path / "sample.json")
+    with io.open(sample, encoding="utf-8") as handle:
+        payload = json.load(handle)
+    # 重跑模块（除 git_version 外全部重算），比对除指纹外的每个字节
+    rebuilt = canonical.with_digest(report.build_report(SMUGGLE_REPO))
+    rebuilt["git_version"] = recorded_git_version
+    rebuilt["fidelity"]["git_version"] = recorded_git_version
+    rebuilt["ledger"]["git_version"] = recorded_git_version
+    assert canonical.dumps(canonical.with_digest(rebuilt)) == canonical.dumps(payload), (
+        "跨 git 版本时，除 `git_version` 指纹外，样例内容必须与当前构建逐字节一致"
+        "（否则说明样例真的漂移了，而不是环境指纹不同）"
+    )
+    # 指纹不同时 `--verify` 退出码必须是非 0，且定位到 git_version
+    with io.open(path, "w", encoding="utf-8", newline="\n") as handle:
+        handle.write(canonical.dumps(payload))
+    code2, text = report.verify_report(SMUGGLE_REPO, path)
+    assert code2 == 1
+    assert json.loads(text)["difference"]["json_path"] == "fidelity.git_version"

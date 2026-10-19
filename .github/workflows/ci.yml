@@ -29,6 +29,12 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e ".[dev]"
 
+      # 合成 fixture 仓库本体是生成物、不入仓（`.gitignore` 排除 `**/repo/`），
+      # 干净 clone 里没有它们。**必须先生成**，否则依赖仓库的测试与 CLI 冒烟全挂。
+      # 这一步也顺带断言"生成器在 CI 的 git 版本上能重建同一批仓库"。
+      - name: "generate synthetic fixtures"
+        run: python tools/gen_fixtures.py --out data/fixtures
+
       - name: "pytest"
         run: python -m pytest -q
 

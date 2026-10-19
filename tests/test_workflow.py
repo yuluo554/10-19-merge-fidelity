@@ -46,6 +46,7 @@ def test_workflow_steps_are_named_and_counted():
         "checkout",
         "setup python ${{ matrix.python }}",
         "install (README path)",
+        "generate synthetic fixtures",
         "pytest",
         "CLI smoke (console script)",
         "CLI smoke (module form)",
