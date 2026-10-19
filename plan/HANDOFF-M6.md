@@ -2,7 +2,7 @@
 
 > **状态：✅ 已完成（2026-10-19）**。发布留档见 `plan/RELEASE-M6.md`（两栏：tag 前事实 / tag 后追加事实）。
 > 本棒核心不是写代码，而是把"陌生人 30 秒能装上并看到输出"变成事实——过程中 CI 首推
-> 实测抓出并修掉 **3 个真缺陷**（见 §2.6），发布包干净环境实测又抓出**第 4 个**（同见 §2.6）。
+> 实测抓出并修掉 **3 个真缺陷**（见 §2.6），发布包干净环境实测又抓出**另外 3 个**（同见 §2.6）。
 >
 > 本文件由 M5 收尾时写入。上游：`plan/05-里程碑.md` 的 M6 行、`plan/06-交付对标.md` §四、`plan/01-题目文档.md` §三。
 > 用法：新对话 `/goal 读取 "<项目绝对路径>\plan\HANDOFF-M6.md" 继续完成任务`。
@@ -92,10 +92,12 @@ tag `v0.1.0` / Release 标题。**当前是 `0.1.0.dev0`，发布前统一改成
 - 留档 `plan/RELEASE-M6.md` 两栏：tag 前事实 / tag 后追加事实（run id 等）。
 - **CI 首推后据实补记 run id**，并把 `plan/00` 台账里的"CI 绿待首推验证"改成真实结论。
 
-### 2.6 本棒实测抓出的 4 个真缺陷（逐条已修 + 变异验证）
+### 2.6 本棒实测抓出的 6 个真缺陷（逐条已修 + 变异验证）
 
 > 本项目的 CI 此前**从未跑过**——所有"CI 绿"都是"本地等价校验，待首推验证"。首次推送后
-> 四个 job 全红，暴露出前 3 个缺陷；从**发布包**做干净环境实测时又抓出第 4 个。
+> 四个 job 全红，暴露出前 3 个缺陷；从**发布包**做干净环境实测（下载 tar.gz → 解包 → 新 venv →
+> 按 README 跑三场景与 `pytest`）时又抓出后 3 个。**"发布包实测"与"CI 绿"是两个不同的门**，
+> 后者查不出前者的问题。
 
 | # | 缺陷 | 症状 | 修法 |
 |---|---|---|---|
@@ -103,10 +105,13 @@ tag `v0.1.0` / Release 标题。**当前是 `0.1.0.dev0`，发布前统一改成
 | 2 | **干净 clone 没有合成仓库，CI 直接 pytest 全挂** | `data/fixtures/**/repo/` 被 `.gitignore` 排除，检出后无仓库 → 依赖仓库的测试与全部 CLI 冒烟 step 全红 | CI 新增 `generate synthetic fixtures` step（**11→12 step**），置于 `pytest` 之前；同步更新 `test_workflow.py` 断言 |
 | 3 | **报告样例的 `git_version` 指纹跨机不同 → `--verify` 必然非 0** | 样例在本机 `2.54.0.windows.1` 生成，CI runner 是 `2.55.0` / `2.56.0.windows.2`；`git_version` 参与 digest，逐字节比较命中 `fidelity.git_version`，rc=1 | 定案：`git_version` 是**环境指纹**（`data/README.md` §4.6），跨机不同是设计如此。测试改两段——同版本强断言 rc=0；跨版本要求差异**恰好只落在指纹字段**（其余逐字节一致），两分支均已实测 |
 | 4 | **`--show-kind` 的 argparse `choices=` 拒绝文档化的逗号列表**（**发布包实测**抓出） | `plan/03` §1.1 与 README 场景一的口径是 `--show-kind=smuggled,dropped`，`_kinds_from_args` 也实现了逗号拆分，但 `cli.py` 给它加了 `choices=(...)` → argparse 把整串当一个值拒绝。**干净环境按 README 跑场景一 → 退出码 2**，"陌生人 30 秒"直接卡在第一条命令 | 去掉 `choices=`，逗号拆分与非法值报错交给 `_kinds_from_args`（`UsageError` → 2）；补 2 条测试（逗号形态被接受 rc=0 / 非法值仍 2） |
+| 5 | **发布包里 `pytest` 必挂：无 `.git` 时 `git ls-files`/`git check-ignore` 直接 128**（**发布包实测**） | 手工源码包不含 `.git`，而 README 的"开发"一节让人在解包目录跑 `pytest`；`test_synthetic_repos_are_not_tracked_and_are_ignored` 无条件调 git → `fatal: not a git repository` | 分两种环境：git 工作树里照旧强断言；非 git（发布包）退化为**断言 `.gitignore` 规则文本存在**并 `skip`（不伪造"已忽略"结论） |
+| 6 | **发布包慢层的 `--check` 因"冻结仓库不存在"必挂**（**发布包实测**） | `repo/` 是生成物不入包，`--check` 拿"冻结目录（无仓库）"与"临时重生成目录（有仓库）"比对 → 21 处 `frozen 仓库不存在`；README 让人直接 `pytest` 会踩到 | `test_gen_fixtures.py` 加 session 级 autouse fixture：缺仓库则先跑生成器（不传 `--suite`，写出的 manifest 与入仓版本同内容）；与另三个测试模块的既有 fixture 口径一致 |
 
 - 缺陷 1–3：修复后 CI run `39199785754`（commit `cc00c47`）**四 job 全绿**（ubuntu-22.04 / windows-latest × py3.8 / py3.12）。
-- 缺陷 4：由**发布包干净环境实测**抓出（从 Release 下载 `mergefidelity-0.1.0.tar.gz` → 解包 → 新建 venv → 按 README 跑三场景时命中），
-  修正在 commit `d9ea34a`，CI run `39205421988` **四 job 全绿**。
+- 缺陷 4–6：由**发布包干净环境实测**抓出，修正在 commit `d9ea34a` / 本轮；CI run `39206716739`（commit `f23438e`）**四 job 全绿**；
+  发布包内实跑 `pytest` → **258 passed, 1 skipped**（skip 即"无 `.git`，忽略规则生效与否不可判"）。
+- tag `v0.1.0` 因此从 `fbb0ab6`（含缺陷 4）移到含全部修复的提交，附件重建并覆盖；移动记录见 `plan/RELEASE-M6.md` §3.1。
 
 ### 2.5 收尾
 

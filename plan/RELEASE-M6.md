@@ -64,19 +64,48 @@
 
 ## 三、tag 后追加事实
 
-> 以下由 tag/Release 落地后据实填写。
-
 | 项 | 值 |
 |---|---|
-| tag OID | `______`（`git rev-parse v0.1.0`） |
-| Release URL | `______` |
-| 源码包名 | `mergefidelity-0.1.0.tar.gz` |
-| 源码包 sha256 | `______` |
-| `SHA256SUMS` 附件 | `______` |
-| CI run id（首推 + 发布后） | `______` |
-| 首个绿 CI run | `39199785754`（commit `cc00c47`，4 job 全绿，2026-10-19T04:30–04:36Z） |
+| tag（annotated 对象） | `097ae82`（`git rev-parse v0.1.0`） |
+| tag 指向的 commit | `f23438e`（`git rev-parse v0.1.0^{commit}`） |
+| Release URL | <https://github.com/yuluo554/10-19-merge-fidelity/releases/tag/v0.1.0> |
+| Release 状态 | 非草稿、非预发布（`isDraft=false`、`isPrerelease=false`） |
+| 源码包名 | `mergefidelity-0.1.0.tar.gz`（190213 字节） |
+| 源码包 sha256 | `b8f3e411c4c0f00301d1f22900804c23fc674cbb41dfae222993dbcee6abb435` |
+| `SHA256SUMS` 附件 | 同上一行（93 字节，`sha256sum -c` 通过） |
+| 构建可复现性 | 3 次 `git archive v0.1.0 \| gzip -9n` 逐字节一致（`cmp` 通过） |
+| CI run（首推，修复 3 缺陷） | `39197159675`（红）→ `39199785754`（绿，commit `cc00c47`） |
+| CI run（文档收尾） | `39202465908`（绿，commit `fbb0ab6`） |
+| CI run（修第 4 缺陷） | `39205421988`（绿，commit `d9ea34a`） |
+| CI run（最终发布提交） | `39206716739`（**绿**，commit `f23438e`，四 job 全绿） |
 
-## 四、M6 抓出的真缺陷（CI 首推实测）
+### 3.1 tag 移动记录（如实留档）
+
+| 时点 | tag → commit | 源码包 sha256 | 原因 |
+|---|---|---|---|
+| 首次发布 | `e6ddce8` → `fbb0ab6` | `a064e105…` | 按当时 CI 绿（`39202465908`）发布 |
+| 修正后重发 | `097ae82` → `f23438e` | `b8f3e411…` | **发布包实测**发现 README 场景一的 `--show-kind=smuggled,dropped` 退出码 2（缺陷 4）；修复提交 `d9ea34a` 后 CI 绿（`39206716739`），tag 移到含修复与留档的 `f23438e`，附件重建并覆盖 |
+
+**为什么允许移动**：`v0.1.0` 发布仅数分钟、无真实下游（附件下载数 1，是本轮自校验），
+而留在原 tag 会直接违反 M6 的 DoD（"干净 clone 按 README 跑通三场景"）。
+这是一个**刻意的取舍**，不是疏漏；若将来已有人依赖该 tag，则应按"另发 v0.1.1"处理而非移动。
+
+### 3.2 发布后干净环境实测（最终附件）
+
+从 Release 重新下载 → `sha256sum -c` 通过 → 解包 → `py -3.8 -m venv` 新建 → `pip install -e ".[dev]"`：
+
+| 检查 | 结果 |
+|---|---|
+| `mergefidelity --version` | `mergefidelity 0.1.0` |
+| `tools/gen_fixtures.py --out data/fixtures --check` | `--check 通过：21 个 fixture 与冻结产物逐字节一致` |
+| 场景一 `fidelity scan --show-kind=smuggled,dropped` | rc=0；`--fail-on=smuggled` → rc=1 |
+| 场景二 `parity --from=release/1.0 --to=main`（含 `--no-apply-fallback`） | rc=0 / rc=0 |
+| 场景三 `gate --baseline=audit-baseline.toml --fail-on=smuggled` | rc=0（旧账未过期） |
+| `ledger`（含 `--range`） | rc=0 / rc=0 |
+| `report --out` → `report --verify` | rc=0，`verified: 1 merges, 1 findings` |
+| `report --verify docs/report-sample.json` | rc=0，`verified: 1 merges, 1 findings` |
+
+## 四、M6 抓出的真缺陷（CI 首推 + 发布包实测）
 
 > CI 在本项目**从未跑过**（此前所有"CI 绿"都是"本地等价校验，待首推验证"）。首次推送后
 > 四个 job 全红，暴露出 3 个真缺陷——这条证据链正是"待首推验证"这一措辞的意义所在。
@@ -87,7 +116,9 @@
 | 2 | **干净 clone 没有合成仓库，CI 直接 pytest 全挂** | `data/fixtures/**/repo/` 被 `.gitignore` 排除，CI 检出后无仓库 → 所有依赖仓库的测试与 CLI 冒烟全红 | CI 新增 `generate synthetic fixtures` step（step 数 11→12），置于 `pytest` 之前；同步更新 `test_workflow.py` 的 step 断言 | 删掉该 step → CI 复现全红（首推实测） |
 | 3 | **报告样例的 `git_version` 指纹跨机不同 → `--verify` 必然非 0** | 样例在本机 `2.54.0.windows.1` 生成，CI runner 是 `2.55.0` / `2.56.0.windows.2`；`git_version` 参与 digest，故逐字节比较命中 `fidelity.git_version`，rc=1 | 定案：`git_version` 是**环境指纹**（`data/README.md` §4.6），跨机不同**是设计如此**。测试改两段——同版本强断言 rc=0；跨版本要求差异**恰好只落在指纹字段**（其余逐字节一致） | 伪造 `git_version` → 断言仍要求 rc=1 且 `json_path=fidelity.git_version`（两分支均已实测） |
 | 4 | **`--show-kind` 的 argparse `choices=` 拒绝文档化的逗号列表**（**发布包实测**抓出，比前三个更晚） | `plan/03` §1.1 与 README 场景一的口径是 `--show-kind=smuggled,dropped`，`fidelity._kinds_from_args` 也实现了逗号拆分，但 `cli.py` 给该选项加了 `choices=("smuggled","dropped","resolution","all")` → argparse 把整串当一个值拒绝。**干净环境按 README 跑场景一 → 退出码 2**，"陌生人 30 秒"直接卡在第一条命令 | 去掉 `choices=`，逗号拆分与非法值报错交给 `_kinds_from_args`（`UsageError` → 退出码 2）；`--help` 的 metavar 改为 `KINDS` | 新增 2 条测试：`--show-kind=smuggled,dropped` / `=all` / `=dropped,resolution` 必须被接受（rc=0）；`=weird` 仍 rc=2 |
+| 5 | **发布包里 `pytest` 必挂：`git ls-files`/`git check-ignore` 在无 `.git` 目录直接 128** | 手工源码包（`git archive`）**不含 `.git`**，而 README 的"开发"一节让人在解包目录跑 `pytest`。`test_synthetic_repos_are_not_tracked_and_are_ignored` 无条件调 git → `fatal: not a git repository`（128），测试失败 | 分两种环境：git 工作树里照旧强断言；非 git（发布包）退化为**断言 `.gitignore` 规则文本存在**并 `skip`（不伪造"已忽略"结论） | 在解包目录实跑：该测试 `skip`，其余全绿 |
+| 6 | **发布包慢层的 `--check` 因"冻结仓库不存在"必挂** | 同上：`repo/` 是生成物不入包，`--check` 拿"冻结目录（无仓库）"与"临时重生成目录（有仓库）"比对 → 21 处 `frozen 仓库不存在`。README 让人直接 `pytest` 会踩到 | `test_gen_fixtures.py` 加 session 级 autouse fixture：缺仓库则先跑生成器（不传 `--suite`，写出的 manifest 与入仓版本同内容）；与 test_fidelity/parity/ledger 的既有 fixture 口径一致 | 清空 `data/fixtures/*/*/repo` 后实跑：自动生成、`--check` 通过 |
 
-**结论**：4 个缺陷都已修复。缺陷 1–3 由 CI 首推实测抓出（run `39199785754` → 修复后 `39202465908` 四 job 全绿）；
-缺陷 4 由**发布包干净环境实测**抓出（从 Release 下载 tar.gz → 解包 → 新建 venv → 按 README 跑三场景时命中），
-修正在 commit `d9ea34a`。
+**结论**：6 个缺陷都已修复。缺陷 1–3 由 CI 首推实测抓出（run `39197159675` 红 → 修复后 `39199785754` 四 job 全绿）；
+缺陷 4–6 由**发布包干净环境实测**抓出（从 Release 下载 tar.gz → 解包 → 新建 venv → 按 README 跑三场景与 `pytest` 时命中），
+修复后 CI run `39206716739` 四 job 全绿，发布包内 `pytest` 实跑 **258 passed, 1 skipped**。

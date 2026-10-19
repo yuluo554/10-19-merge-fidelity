@@ -31,6 +31,34 @@ def _load(path):
         return json.load(handle)
 
 
+@pytest.fixture(scope="session", autouse=True)
+def all_synthetic_repos():
+    """确保 21 个合成仓库都已生成（缺失则现跑生成器）。
+
+    **M6 发布包实测抓出的真缺陷**：手工源码包不含 `data/fixtures/**/repo/`（生成物、不入仓），
+    而本模块的慢层 `--check` 要把"冻结目录"与"临时重生成目录"逐字节比对——冻结目录没有仓库时
+    必然报 21 处 `frozen 仓库不存在`。README 的"开发"一节让人在解包目录里直接跑 `pytest`，
+    于是发布包里必挂。本 fixture 与 test_fidelity/parity/ledger 的同名 fixture 口径一致：
+    缺则生成（不传 `--suite`/`--only`，因此会按全集写回 manifest.json，内容与入仓版本相同）。
+    """
+    missing = []
+    for suite, names in SUITES.items():
+        for name in sorted(os.listdir(os.path.join(FIXTURES, suite))
+                           if os.path.isdir(os.path.join(FIXTURES, suite)) else []):
+            if not os.path.isfile(os.path.join(FIXTURES, suite, name, "expect.json")):
+                continue
+            if not os.path.isdir(os.path.join(FIXTURES, suite, name, "repo")):
+                missing.append("%s/%s" % (suite, name))
+    if not missing:
+        return True
+    proc = subprocess.run(
+        [sys.executable, "-X", "utf8", GENERATOR, "--out", "data/fixtures"],
+        cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+    )
+    assert proc.returncode == 0, proc.stdout.decode("utf-8", "replace")
+    return True
+
+
 @pytest.fixture(scope="session")
 def golden():
     """读全部冻结 golden（不重生成，快）。"""
@@ -76,12 +104,35 @@ def test_golden_files_are_canonical_lf_json():
 
 
 def test_synthetic_repos_are_not_tracked_and_are_ignored():
-    """合成仓库本体是生成物：既不入仓，也确实被 .gitignore 挡住。"""
+    """合成仓库本体是生成物：既不入仓，也确实被 .gitignore 挡住。
+
+    **M6 发布包实测抓出的真缺陷**：手工源码包（`git archive`）**不含 `.git`**，而 README
+    让人在解包目录里跑 `pytest` —— 此测试原先无条件调 `git ls-files` / `git check-ignore`，
+    在发布包里直接 `fatal: not a git repository`（退出码 128）而失败。
+    现在分两种环境：
+
+    * 在 git 工作树里（开发/CI）：照旧做 `git ls-files` + `git check-ignore` 的强断言；
+    * 不在 git 工作树里（发布包）：退化为**读 `.gitignore` 文本断言规则存在**，
+      并把"是否真的被忽略"标为不可判——不伪造结论、也不假装通过。
+    """
+    ignore_rules = ("data/fixtures/**/repo/", "data/fixtures/**/.git/")
+    ignore_text = io.open(os.path.join(ROOT, ".gitignore"), encoding="utf-8").read()
+    for rule in ignore_rules:
+        assert rule in ignore_text, ".gitignore 必须排除合成仓库：%s" % rule
+
+    in_worktree = subprocess.run(
+        ["git", "rev-parse", "--git-dir"], cwd=ROOT,
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE).returncode == 0
+    if not in_worktree:
+        pytest.skip("发布包（无 .git）：已断言 .gitignore 规则存在，忽略生效与否无法在此判定")
+
     out = subprocess.run(["git", "ls-files", "data/fixtures"], cwd=ROOT,
                          stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     tracked = out.stdout.decode("utf-8", "replace").splitlines()
     assert not [p for p in tracked if "/repo/" in p or p.endswith(".git")], tracked
-    sample = os.path.join("data", "fixtures", "fidelity", "smuggle-extra-line", "repo")
+    # 注意目录必须带结尾斜杠：`.gitignore` 的规则是 `data/fixtures/**/repo/`，
+    # `git check-ignore` 对"不存在的目录且无尾斜杠"会判不匹配（返回 1）。
+    sample = os.path.join("data", "fixtures", "fidelity", "smuggle-extra-line", "repo") + os.sep
     rc = subprocess.run(["git", "check-ignore", "-q", sample], cwd=ROOT).returncode
     assert rc == 0, "合成仓库目录必须被 .gitignore 排除：%s" % sample
 
