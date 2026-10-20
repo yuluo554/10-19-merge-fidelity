@@ -176,3 +176,26 @@ tag 后留档提交 `42b5c51` 的 run `39217774688` 同样四 job 全绿。
 **结论**：6 个缺陷都已修复。缺陷 1–3 由 CI 首推实测抓出（run `39197159675` 红 → 修复后 `39199785754` 四 job 全绿）；
 缺陷 4–6 由**发布包干净环境实测**抓出（从 Release 下载 tar.gz → 解包 → 新建 venv → 按 README 跑三场景与 `pytest` 时命中），
 修复后 CI run `39206716739` 四 job 全绿，发布包内 `pytest` 实跑 **258 passed, 1 skipped**。
+
+---
+
+## 五、v0.2.0 发布事实（2026-10-21，tag 之后追加，不参与任何源码包生成）
+
+> 与 §3.3 同一自指约束：本节字面值只存在于 tag 之后的提交。
+
+| 项 | 值 |
+|---|---|
+| tag（annotated 对象） | `0220f99`（`git rev-parse v0.2.0` = `0220f99a2b611b62f8327f98b146f248231d36a2`） |
+| tag 指向的 commit | `176b27d`（`176b27df4771153592c7c1d7a575da3eac8e1a28`）；**tag == HEAD，零滞后** |
+| Release URL | <https://github.com/yuluo554/merge-fidelity/releases/tag/v0.2.0> |
+| Release 状态 | 非草稿、非预发布（`isDraft=false`、`isPrerelease=false`，gh API 实查） |
+| 源码包名 / 大小 | `mergefidelity-0.2.0.tar.gz`（198883 字节） |
+| 源码包 sha256 | `1bc08aadb6760d7b184bfbd5ae50a8a8d909d12f3caa9da08fcd7f63ac3b3953` |
+| `SHA256SUMS` 附件 | sha256 `49d4f98a6260cfbcd1550b88641f692527a81b3a5f76b5934c82f172369e5f2e`（93 字节；下载后 `sha256sum -c` OK） |
+| 构建形态 / 可复现性 | 与 v0.1.0 同口径：`git archive --format=tar --prefix=mergefidelity-0.2.0/ v0.2.0 \| gzip -9n` 两次逐字节一致（`cmp` 通过）；Release 附件下载后与本地构建 `cmp` **BYTES_IDENTICAL** |
+| CI run（main push `176b27d`） | `39462352929` **绿**（2 job 全 success，注解 0——actions v7 后 Node20 弃用清零） |
+| CI run（tag push `v0.2.0`） | `39463653469` **绿**（2 job 全 success，注解 0） |
+| 发布包内容实测 | 匿名下载两附件 → `sha256sum -c` OK → 与本地构建逐字节同 → 包内 `pyproject.toml:7` 与 `__init__.py:10` 均 `0.2.0`、无 `.git`、无旧仓名 URL（`10-19-merge-fidelity` 0 命中） |
+| 本轮迭代依据 | `update/00-诊断报告.md`（D1–D13）、`update/03-执行记录.md`（B0–B6，状态于发布前补记为已复验） |
+
+**v0.1.0 未动**：tag `a28e1ab` → `5b001c1`、Release 与两附件原样保留；v0.1.0 发布物内旧 URL 经 301 跳转可用（DEC4=A）。
