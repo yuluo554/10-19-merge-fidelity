@@ -81,7 +81,10 @@ def bench_fixture(name, repeats=3):
 def main(argv=None):
     parser = argparse.ArgumentParser(prog="bench_parity.py",
                                      description="parity 性能基准（产物入仓，不含阈值断言）")
-    parser.add_argument("--out", default=os.path.join("bench", "parity.json"))
+    parser.add_argument("--out", default=os.path.join("bench", "parity.local.json"),
+                    help="产物输出路径（默认写 .local.json，不碰入仓快照）")
+    parser.add_argument("--commit-snapshot", action="store_true", default=False,
+                        help="显式给出才覆盖入仓快照 bench/parity.json")
     parser.add_argument("--only", action="append", default=None)
     parser.add_argument("--repeats", type=int, default=3)
     args = parser.parse_args(argv)
@@ -104,6 +107,9 @@ def main(argv=None):
         "fixtures": entries,
     }
 
+    if args.commit_snapshot:
+        args.out = os.path.join("bench", "parity.json")
+        print("正在覆盖入仓快照 bench/parity.json")
     out = os.path.join(ROOT, args.out)
     os.makedirs(os.path.dirname(out), exist_ok=True)
     with io.open(out, "w", encoding="utf-8", newline="\n") as handle:
