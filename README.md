@@ -60,6 +60,15 @@ Windows 上 `python` 可能是应用商店占位符，用 `py -3.8` / `py -3.12`
 >     --baseline audit-baseline.toml            # → 退出码 0（baselined=1）
 > ```
 >
+> 注意：上面那条 `--verify` **仅当本机 git 版本为 2.54.0.windows.1 时通过**——
+> `git_version` 是环境指纹，参与 digest，跨 git 版本会得到 `content_mismatch`（这是设计，不是 bug）。
+> 跨机替代：先在自己机器上重出报告再验证同一份：
+>
+> ```bash
+> mergefidelity report data/fixtures/fidelity/smuggle-extra-line/repo --out r.json
+> mergefidelity report data/fixtures/fidelity/smuggle-extra-line/repo --verify r.json   # → verified
+> ```
+>
 > 下面的 ` /path/to/repo ` 换成你自己的仓库即可（对**任意** git 仓库都适用，不依赖 fixture）。
 
 ```bash
@@ -171,7 +180,8 @@ mergefidelity report /path/to/repo --parity-from=release/1.0 --parity-to=main   
   `merge.conflictStyle` 等由工具固定注入，并登记在报告头的 `config_overrides`。
   理由：实测 `merge.conflictStyle=zdiff3` 会改变机械树 OID（`51683564511b…` → `0f5a5d03ff9a…`），
   不钉死则同一仓库在不同机器上得出不同结论。**你的仓库/用户级配置不会影响判定**。
-- **跨平台**：首期只在 Windows（git 2.54.0.windows.1）实测；Linux/macOS 由 CI 矩阵覆盖。
+- **跨平台**：首期只在 Windows（git 2.54.0.windows.1）实测；Linux 由 CI 矩阵（ubuntu-22.04）覆盖；
+  **macOS 无 CI、无实测**。
 - **规模**：>10 万提交的仓库无样本，首期不承诺上限。
 - **结论语义**：`blob_fidelity` 与 finding 是"机械合并 vs 实际记录"的**差异证据**，
   **不等于"这段代码错了"**；报告同时给出两侧树的可复算入口，由人判断业务影响。
@@ -194,7 +204,8 @@ mergefidelity report /path/to/repo --parity-from=release/1.0 --parity-to=main   
 - **`report` 不写扫描时刻、绝对路径、主机名、用户名、locale、Python 版本**：报告头只有
   `tool_version` / `git_version` / `object_format` / `gitattributes_oid` / `config_overrides` /
   `range` / `as_of` / `findings_digest_algorithm`。换时区（`TZ`）与 `core.quotepath` 不改变 digest；
-  `as_of` 取自提交时间，因此同一 fixture 在任何机器上重算同一 digest。
+  `as_of` 取自提交时间；`git_version` 是**环境指纹**——同一 fixture、同一 `git_version`、
+  同一对象库下重算同一 digest；**跨 git 版本必然不同**，不要期望跨机 `--verify` 通过（见下）。
 - **`report --verify` 的定位顺序是"先内容、后 digest"**：任何内容篡改都会被逐字节比较先抓住，
   `json_path` 落在**被改的那个字段**（如 `fidelity.merges[0].hunks[0].new_range`）；
   只改了 `digest` 自身才定位到 `digest`。先查 digest 会把"哪一处被改了"这个真正有用的答案盖掉。

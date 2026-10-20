@@ -146,6 +146,29 @@ def test_readme_declared_license_file_exists():
     assert "MIT" in _read(os.path.join(ROOT, "pyproject.toml"))
 
 
+def test_readme_verify_sample_states_git_version_qualifier():
+    """README 的样例 `--verify docs/report-sample.json` 必须带 git 版本限定语。
+
+    `git_version` 参与报告 digest（环境指纹），样例只在 git 2.54.0.windows.1 上通过；
+    防止将来又被改回「任何机器都通过」的不实陈述（D1/D2 修复的守门）。
+    """
+    readme = _readme()
+    assert "仅当本机 git 版本为 2.54.0.windows.1 时通过" in readme, (
+        "README 缺少样例 --verify 的 git 版本限定语（2.54.0.windows.1）"
+    )
+    # 同时必须给出跨机替代通路（先 --out 再 --verify 同一份）
+    assert "--out r.json" in readme, "README 缺少跨机替代命令（report --out 后再 --verify）"
+    # 不得再出现「任何机器上重算同一 digest」的跨机声明
+    assert "任何机器上重算同一 digest" not in readme, (
+        "README 重新出现「任何机器上重算同一 digest」的不实陈述"
+    )
+
+
+def test_readme_cross_platform_states_macos_untested():
+    """README 跨平台段必须如实写「macOS 无 CI、无实测」（D3 修复的守门）。"""
+    assert "macOS 无 CI、无实测" in _readme()
+
+
 def test_every_registered_subcommand_has_a_dispatch_path():
     from mergefidelity import cli
 
