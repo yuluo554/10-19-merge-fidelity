@@ -1,25 +1,24 @@
 [build-system]
-requires = ["setuptools>=61"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "mergefidelity"
-version = "0.1.0"
+version = "0.2.0"
 description = "Merge 保真度审计：用 git 自己的合并引擎复算机械合并，逐 blob 对比实际记录的树"
 readme = "README.md"
-requires-python = ">=3.8"
-license = { text = "MIT" }
+requires-python = ">=3.12"
+license = "MIT"
 authors = [{ name = "yuluo554", email = "282769740+yuluo554@users.noreply.github.com" }]
 keywords = ["git", "merge", "audit", "evil-merge", "backport", "reproducible"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Environment :: Console",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Software Development :: Version Control :: Git",
     "Topic :: Software Development :: Quality Assurance",
 ]

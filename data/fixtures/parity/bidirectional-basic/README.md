@@ -5,7 +5,7 @@
 ## 手工复现
 
 ```bash
-py -3.8 tools/gen_fixtures.py --out data/fixtures --only bidirectional-basic
+py -3.12 tools/gen_fixtures.py --out data/fixtures --only bidirectional-basic
 cd data/fixtures/parity/bidirectional-basic/repo
 git rev-list --cherry-pick --right-only release/1.0...main
 ```

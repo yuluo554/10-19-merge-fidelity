@@ -5,7 +5,7 @@
 ## 手工复现
 
 ```bash
-py -3.8 tools/gen_fixtures.py --out data/fixtures --only then-redone
+py -3.12 tools/gen_fixtures.py --out data/fixtures --only then-redone
 cd data/fixtures/ledger/then-redone/repo
 git log --grep='^This reverts commit' --format='%H%x00%B' | cat
 ```

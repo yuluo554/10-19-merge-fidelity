@@ -15,9 +15,9 @@
 
 用法::
 
-    py -3.8 tools/gen_fixtures.py --out data/fixtures              # 生成/覆盖
-    py -3.8 tools/gen_fixtures.py --out data/fixtures --only fidelity
-    py -3.8 tools/gen_fixtures.py --check --out data/fixtures      # 重生成到临时目录并逐字节比对
+    py -3.12 tools/gen_fixtures.py --out data/fixtures              # 生成/覆盖
+    py -3.12 tools/gen_fixtures.py --out data/fixtures --only fidelity
+    py -3.12 tools/gen_fixtures.py --check --out data/fixtures      # 重生成到临时目录并逐字节比对
 
 退出码：0 成功/一致；1 `--check` 发现差异；2 用法错误；3 环境不满足（git 不可用/版本过低）。
 """
@@ -1340,7 +1340,7 @@ def _fixture_readme(suite, name, record):
         "## 手工复现",
         "",
         "```bash",
-        "py -3.8 tools/gen_fixtures.py --out data/fixtures --only %s" % name,
+        "py -3.12 tools/gen_fixtures.py --out data/fixtures --only %s" % name,
     ]
     if suite == "fidelity":
         lines += [

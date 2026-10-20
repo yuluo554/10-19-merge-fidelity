@@ -35,7 +35,7 @@ def test_workflow_matrix_covers_both_axes():
     doc = _load()
     matrix = doc["jobs"]["test"]["strategy"]["matrix"]
     assert matrix["os"] == ["ubuntu-22.04", "windows-latest"]
-    assert matrix["python"] == ["3.8", "3.12"]
+    assert matrix["python"] == ["3.12"]
     assert doc["jobs"]["test"]["strategy"]["fail-fast"] is False
 
 

@@ -5,7 +5,7 @@
 ## 手工复现
 
 ```bash
-py -3.8 tools/gen_fixtures.py --out data/fixtures --only drop-guard-check
+py -3.12 tools/gen_fixtures.py --out data/fixtures --only drop-guard-check
 cd data/fixtures/fidelity/drop-guard-check/repo
 git log --oneline --graph | cat
 git log --merges --remerge-diff -p --no-renames --format='%H%x00%P' | cat

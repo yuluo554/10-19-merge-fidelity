@@ -5,7 +5,7 @@
 ## 手工复现
 
 ```bash
-py -3.8 tools/gen_fixtures.py --out data/fixtures --only smuggle-function-body
+py -3.12 tools/gen_fixtures.py --out data/fixtures --only smuggle-function-body
 cd data/fixtures/fidelity/smuggle-function-body/repo
 git log --oneline --graph | cat
 git log --merges --remerge-diff -p --no-renames --format='%H%x00%P' | cat

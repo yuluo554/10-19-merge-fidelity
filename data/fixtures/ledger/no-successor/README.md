@@ -5,7 +5,7 @@
 ## 手工复现
 
 ```bash
-py -3.8 tools/gen_fixtures.py --out data/fixtures --only no-successor
+py -3.12 tools/gen_fixtures.py --out data/fixtures --only no-successor
 cd data/fixtures/ledger/no-successor/repo
 git log --grep='^This reverts commit' --format='%H%x00%B' | cat
 ```

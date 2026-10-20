@@ -35,13 +35,15 @@
 
 ## 安装
 
+需要 Python ≥ 3.12（v0.2.0 起；3.8 已于 2024-10-07 EOL，v0.1.0 及更早支持 3.8）。
+
 ```bash
-py -3.8 -m pip install -e ".[dev]"      # 运行时零依赖；dev 只为跑测试
+py -3.12 -m pip install -e ".[dev]"      # 运行时零依赖；dev 只为跑测试
 mergefidelity --version
 mergefidelity --help
 ```
 
-Windows 上 `python` 可能是应用商店占位符，用 `py -3.8` / `py -3.12`；跑脚本加 `-X utf8`。
+Windows 上 `python` 可能是应用商店占位符，用 `py -3.12`；跑脚本加 `-X utf8`。
 
 ## 用法（最小复现命令）
 
@@ -52,8 +54,8 @@ Windows 上 `python` 可能是应用商店占位符，用 `py -3.8` / `py -3.12`
 > 先跑一次生成器把 21 个仓库建出来（固定作者/时间/树，可位级重建）：
 >
 > ```bash
-> py -3.8 -X utf8 tools/gen_fixtures.py --out data/fixtures            # 首次需要
-> py -3.8 -X utf8 tools/gen_fixtures.py --out data/fixtures --check    # 断言逐字节一致
+> py -3.12 -X utf8 tools/gen_fixtures.py --out data/fixtures            # 首次需要
+> py -3.12 -X utf8 tools/gen_fixtures.py --out data/fixtures --check    # 断言逐字节一致
 > mergefidelity report data/fixtures/fidelity/smuggle-extra-line/repo \
 >     --verify docs/report-sample.json          # → verified: 1 merges, 1 findings
 > mergefidelity gate data/fixtures/fidelity/smuggle-extra-line/repo \
@@ -209,7 +211,7 @@ mergefidelity report /path/to/repo --parity-from=release/1.0 --parity-to=main   
 - **`report --verify` 的定位顺序是"先内容、后 digest"**：任何内容篡改都会被逐字节比较先抓住，
   `json_path` 落在**被改的那个字段**（如 `fidelity.merges[0].hunks[0].new_range`）；
   只改了 `digest` 自身才定位到 `digest`。先查 digest 会把"哪一处被改了"这个真正有用的答案盖掉。
-- **`gate` 的基线是受限 TOML 子集**（Python 3.8 无 `tomllib`）：只支持 `[[finding]]` +
+- **`gate` 的基线是受限 TOML 子集**（v0.1.0 时代 Python 3.8 无 `tomllib`，自写受限解析器是刻意契约，floor 抬到 3.12 后不变）：只支持 `[[finding]]` +
   字符串值 + 注释；数组 / 嵌套表 / 多行字符串 / 非字符串值 → `toml_unsupported`（退出码 2，**明示行号**）；
   语法错误 / 缺 `justification` / 坏日期 → 退出码 2 且**零副作用**（不写任何产物）。
   `id` 精确匹配，不做前缀/模糊匹配；`expires` 按报告内 `as_of` 比较，**不读系统时钟**；
@@ -220,7 +222,7 @@ mergefidelity report /path/to/repo --parity-from=release/1.0 --parity-to=main   
 ## 开发
 
 ```bash
-py -3.8 -m pytest -q          # 另一条通道：py -3.12 -m pytest -q
+py -3.12 -m pytest -q
 ```
 
 - 测试会自动补齐缺失的合成仓库（`data/fixtures/**/repo/` 是生成物、不入包），
