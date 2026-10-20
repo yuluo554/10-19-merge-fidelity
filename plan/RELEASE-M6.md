@@ -7,7 +7,7 @@
 
 | 项 | 值 |
 |---|---|
-| 仓库 | https://github.com/yuluo554/10-19-merge-fidelity （public） |
+| 仓库 | https://github.com/yuluo554/merge-fidelity （public；建仓时名 `10-19-merge-fidelity`，后更名） |
 | 包名 / 分发名 | `mergefidelity` |
 | 版本 | `0.1.0` |
 | tag | `v0.1.0`（annotated） |
@@ -70,12 +70,16 @@
 > 若把这些值写进 tag 树，包的内容随之改变 → sha256 变 → 写进去的值立刻失真，循环无解。
 > 因此按 HANDOFF 的两栏约定：tag 树只承载"tag 前事实"（§二）与占位骨架；
 > tag 后产生的事实在 tag 之后的 `plan/` 提交里补齐（发布后只允许 `plan/`、`README.md` 面提交）。
+>
+> **URL 更名事实（v0.2.0 迭代补记）**：仓库后由 `10-19-merge-fidelity` 更名 `merge-fidelity`，
+> 旧 URL 301 跳转可用；**v0.1.0 的 tag 树与 Release 附件内仍是旧 URL，不移动 tag**（DEC4=A），
+> 新 URL 随 v0.2.0 生效。
 
 | 项 | tag 树内 | 权威值位置 |
 |---|---|---|
 | tag（annotated 对象） OID | 见 `git rev-parse v0.1.0` | HEAD 版本文档 |
 | tag 指向的 commit | 见 `git rev-parse v0.1.0^{commit}` | HEAD 版本文档 |
-| Release URL | <https://github.com/yuluo554/10-19-merge-fidelity/releases/tag/v0.1.0> | HEAD 版本文档 |
+| Release URL | <https://github.com/yuluo554/merge-fidelity/releases/tag/v0.1.0> | HEAD 版本文档 |
 | Release 状态 | 非草稿、非预发布 | HEAD 版本文档 |
 | 源码包名 | `mergefidelity-0.1.0.tar.gz` | HEAD 版本文档 |
 | 源码包 sha256 | **不在包内记录**（规则：sha256 只写 Release 正文） | HEAD 版本文档 + Release 正文 |
@@ -113,7 +117,7 @@
 |---|---|
 | tag（annotated 对象） | `a28e1ab`（`git rev-parse v0.1.0`） |
 | tag 指向的 commit | `5b001c1`（`git rev-parse v0.1.0^{commit}`） |
-| Release URL | <https://github.com/yuluo554/10-19-merge-fidelity/releases/tag/v0.1.0> |
+| Release URL | <https://github.com/yuluo554/merge-fidelity/releases/tag/v0.1.0> |
 | Release 状态 | 非草稿、非预发布（`isDraft=false`、`isPrerelease=false`） |
 | 源码包名 / 大小 | `mergefidelity-0.1.0.tar.gz`（193878 字节） |
 | 源码包 sha256 | `43f8f8f46e259dbaf7f55a593c67ae7d6e78dafea486d78924717f4a19b90279` |
