@@ -53,7 +53,7 @@
 | `mergefidelity --version` | ✅ | `mergefidelity 0.1.0` |
 | `mergefidelity --help` | ✅ | 五子命令 |
 | `tools/gen_fixtures.py --out data/fixtures` | ✅ | `已生成 21 个 fixture`；生成后 `git status` **干净**（不改动入仓文件） |
-| `pytest -q`（快层 + 慢层） | ✅ | CI 四 job 全绿；本机 3.8/3.12 各 `257 passed`，慢层 `1 passed` |
+| `pytest -q`（快层 + 慢层） | ✅ | CI 四 job 全绿；本机 3.8/3.12 各 `258 passed`，慢层 `1 passed`（v0.1.0 发布时点事实；tag 后迭代新增测试，当前实测见 `plan/00:119`） |
 | `report --verify docs/report-sample.json` | ✅ | 本机同 git 版本 → `verified: 1 merges, 1 findings`，rc=0 |
 | `gate --baseline audit-baseline.toml` | ✅ | rc=0，`counts={'baselined':1,'expired':0,'new':0,'stale':0}` |
 

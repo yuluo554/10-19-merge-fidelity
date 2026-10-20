@@ -32,7 +32,7 @@
 | 共享层口径收敛 | ✅ | `fidelity.range_end`（取代 `ledger._range_end`）、`fidelity.validate_as_of`（取代 `ledger`/`parity` 的 `_validate_as_of`） |
 | CI 接线 | ✅ | 新增 2 step：`CLI smoke (report digest + --verify on generated fixtures)`、`CLI smoke (gate four exit-code semantics)`；workflow 本地 `yaml.safe_load` 通过（**11 step**） |
 | 基准 | ✅ | `bench/gate.json`：12 个 fixture 的完整门禁路径耗时 + 基线命中数/四类计数 |
-| 测试规模 | ✅ | 快层 **257 passed** ×（3.8 / 3.12）；慢层（`--check` 重生成 21 个仓库）1 passed（M6 新增 1 条测试后为 258） |
+| 测试规模 | ✅ | 快层 **258 passed** ×（3.8 / 3.12）；慢层（`--check` 重生成 21 个仓库）1 passed（M6 发布时点事实；tag 后迭代新增测试，当前实测见 `plan/00:119`） |
 
 **本地等价校验（未接远端，CI 待首推验证）**：双解释器快层、3.8 慢层、workflow 本地解析、report `--verify` 与 gate 四组退出码 CLI 冒烟、样例产物复算。
 **不可本机实跑**：Linux/macOS 上 `git log --find-object` / `worktree` / `merge-tree` 行为差异（首份跨平台证据仍由 CI 首推给出）。
@@ -69,7 +69,7 @@ py -3.8 -m venv .venv && .venv/Scripts/pip install -e ".[dev]"
 mergefidelity --version          # → mergefidelity 0.1.0
 mergefidelity --help             # → 五子命令
 py -3.8 tools/gen_fixtures.py --out data/fixtures --check   # → 21/21 逐字节一致
-py -3.8 -m pytest -q             # → 257 passed + 1 slow
+py -3.8 -m pytest -q             # → 快层 258 passed + 慢层 1 passed（M6 时点）
 ```
 
 再按 README 的三个场景逐条跑通（`fidelity scan` / `parity --from --to` / `gate --baseline`），
