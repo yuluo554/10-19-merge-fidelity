@@ -166,3 +166,6 @@ data/fixtures/**/repo/
 
 # bench 本地产物（B2：默认写 .local.json，入仓快照只能 --commit-snapshot 覆盖）
 bench/*.local.json
+
+# 迭代诊断/交接目录（由「诊断对话」产出，含本机绝对路径，不入公共仓）
+update/
